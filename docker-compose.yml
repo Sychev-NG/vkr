@@ -1,0 +1,27 @@
+version: '3.9'
+name: vkr
+services:
+  db:
+    image: postgres:18-alpine
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_DB=vkr_db
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/var/lib/postgresql/migrations
+
+  migrations:
+    image: ghcr.io/kukymbr/goose-docker:3.27.0
+    depends_on:
+      - db
+    environment:
+      - GOOSE_DRIVER=postgres
+      - GOOSE_DBSTRING=postgres://user:password@db:5432/vkr_db?sslmode=disable
+    volumes:
+      - ./migrations:/migrations
+
+volumes:
+  pgdata:
