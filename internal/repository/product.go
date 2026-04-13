@@ -5,5 +5,5 @@ import (
 )
 
 type ProductRepository interface {
-	GetById(id int) Product
+	GetById(id int) entity.Product
 }

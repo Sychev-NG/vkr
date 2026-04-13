@@ -1,9 +1,9 @@
 package entity
 
-type ProductEntity struct {
+type Product struct {
 	id int
 }
 
-func (p ProductEntity) GetId() int {
+func (p Product) GetId() int {
 	return p.id
 }
