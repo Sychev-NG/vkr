@@ -1,9 +1,8 @@
 package entity
 
 type Product struct {
-	id int
-}
-
-func (p Product) GetId() int {
-	return p.id
+	ID int
+	Name string
+	Unit string
+	TypeName string
 }
