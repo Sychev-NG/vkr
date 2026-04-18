@@ -9,6 +9,7 @@ import (
 
 var products = []entity.Product {
 	{ID: 1, Name: "Мука", Unit: "кг", TypeName: "raw"},
+	{ID: 2, Name: "Дрожжи", Unit: "кг", TypeName: "raw"},
 }
 
 type ProductRepository struct {

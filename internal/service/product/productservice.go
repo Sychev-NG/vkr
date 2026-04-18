@@ -33,6 +33,10 @@ func (ps *ProductService) GetById(ctx context.Context, id int) (*entity.Product,
 	return ps.provider.GetById(ctx, id)
 }
 
+func (ps *ProductService) GetAll(ctx context.Context) ([]entity.Product, error) {
+	return ps.provider.GetAll(ctx)
+}
+
 func (ps *ProductService) Update(ctx context.Context, id int, name, unit, productType string) (*entity.Product, error) {
 	return nil, nil
 	// return ps.saver.Update()
