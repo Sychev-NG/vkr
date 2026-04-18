@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,10 +12,18 @@ import (
 	"time"
 
 	"vkr/internal/config"
+	pHandler "vkr/internal/handlers/product"
+	pService "vkr/internal/service/product"
+	pRepo "vkr/internal/repository/postgres/product"
 	"vkr/internal/storage/postgres"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var dbPool *pgxpool.Pool
+
+var productHandler *pHandler.ProductHandler
 
 func main() {
 	cfg := config.MustLoad()
@@ -23,11 +32,20 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	dbPool, err := postgres.NewPool(ctx, *cfg)
+	var err error
+
+	dbPool, err = postgres.NewPool(ctx, *cfg)
 	if err != nil {
 		log.Fatal("Failed to init DB: %v", err)
 	}
 	log.Println("Connection to DB is set")
+
+	productRepository := pRepo.New(dbPool)
+	productService := pService.New(productRepository, productRepository)
+	productHandler = pHandler.New(productService)
+
+	err = dbPool.Ping(ctx)
+	fmt.Printf("Pinging DB %v", err)
 
 	r := setupRouter()
 	
@@ -69,9 +87,22 @@ func setupRouter() *gin.Engine {
 	api := router.Group("/api/v1")
 	{
 		api.GET("/health", func(c *gin.Context) {
+			ctx := context.Background()
+			err := dbPool.Ping(ctx)
+			if err != nil {
+				c.Status(501)
+				return				
+			}
+
 			c.Status(200)
 			return
 		})
+
+		api.GET("/product", productHandler.List)
+		api.GET("/product/:id", productHandler.Get)
+		api.POST("/product", productHandler.Create)
+		api.PATCH("/product/:id", productHandler.Update)
+		api.DELETE("/product/:id", productHandler.Delete)
 	}
 
 	return router
