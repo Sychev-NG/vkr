@@ -7,6 +7,7 @@ import (
 	"vkr/internal/entity"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -33,6 +34,10 @@ func (pr *CounterpartyRepository) Add(ctx context.Context, name, role string) (*
 	)
 
 	if err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { // Psql 23505 - duplicate error code
+			return nil, entity.ErrCounterpartyDuplicateFound
+		}
+
 		log.Printf("CounterpartyRepository::Add Error - %v", err)
 		return nil, err
 	}
@@ -56,6 +61,10 @@ func (pr *CounterpartyRepository) Update(ctx context.Context, id int, name, role
 	)
 
 	if err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { // Psql 23505 - duplicate error code
+			return nil, entity.ErrCounterpartyDuplicateFound
+		}
+
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrCounterpartyNotFound
 		}

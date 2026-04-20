@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	ErrCounterpartyNotFound = errors.New("counterparty not found")
+	ErrCounterpartyDuplicateFound = errors.New("counterparty duplicate found")
 	ErrInvalidCounterpartyName = errors.New("invalid counterparty name")
 	ErrInvalidCounterpartyRole = errors.New("invalid counterparty role")
 )

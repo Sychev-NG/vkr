@@ -107,6 +107,11 @@ func (ch *CounterpartyHandler) Update(c *gin.Context) {
 	)
 
 	if err != nil {
+		if errors.Is(err, entity.ErrCounterpartyDuplicateFound) {
+			c.Status(http.StatusConflict)
+			return
+		}
+
 		if errors.Is(err, entity.ErrCounterpartyNotFound) {
 			c.Status(http.StatusNotFound)
 			return
@@ -165,6 +170,11 @@ func (ch *CounterpartyHandler) Create(c *gin.Context) {
 	)
 
 	if err != nil {
+		if errors.Is(err, entity.ErrCounterpartyDuplicateFound) {
+			c.Status(http.StatusConflict)
+			return
+		}
+
 		if errors.Is(err, entity.ErrInvalidCounterpartyRole) ||
 		   errors.Is(err, entity.ErrInvalidCounterpartyName) {
 			c.Status(http.StatusBadRequest)
