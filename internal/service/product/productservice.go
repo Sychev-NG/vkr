@@ -2,12 +2,13 @@ package product
 
 import (
 	"context"
+	"strings"
 	"vkr/internal/entity"
 )
 
 type ProductSaver interface {
 	Add(ctx context.Context, name, unit, productType string) (*entity.Product, error)
-	Update(ctx context.Context, product entity.Product) (*entity.Product, error)
+	Update(ctx context.Context, id int, name, unit, productType string) (*entity.Product, error)
 	Delete(ctx context.Context, id int) (error)
 }
 
@@ -26,6 +27,11 @@ func New(ps ProductSaver, pp ProductProvider) *ProductService {
 }
 
 func (ps *ProductService) Add(ctx context.Context, name, unit, productType string) (*entity.Product, error) {
+	name = strings.TrimSpace(name)
+	if len(name) == 0 {
+		return nil, entity.ErrInvalidProductName
+	}
+
 	pt := entity.ProductType(productType)
 	if pt != entity.Raw && pt != entity.Finished {
 		return nil, entity.ErrInvalidProductType
@@ -48,8 +54,22 @@ func (ps *ProductService) GetAll(ctx context.Context) ([]entity.Product, error) 
 }
 
 func (ps *ProductService) Update(ctx context.Context, id int, name, unit, productType string) (*entity.Product, error) {
-	return nil, nil
-	// return ps.saver.Update()
+	name = strings.TrimSpace(name)
+	if len(name) == 0 {
+		return nil, entity.ErrInvalidProductName
+	}
+
+	pt := entity.ProductType(productType)
+	if pt != entity.Raw && pt != entity.Finished {
+		return nil, entity.ErrInvalidProductType
+	}
+
+	pu := entity.ProductUnit(unit)
+	if pu != entity.KG {
+		return nil, entity.ErrInvalidProductUnit
+	}
+
+	return ps.saver.Update(ctx, id, name, unit, productType)	
 }
 
 func (ps *ProductService) Delete(ctx context.Context, id int) (error) {

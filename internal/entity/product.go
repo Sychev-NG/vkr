@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	ErrProductNotFound = errors.New("product not found")
+	ErrInvalidProductName = errors.New("invalid product name")
 	ErrInvalidProductType = errors.New("invalid product type")
 	ErrInvalidProductUnit = errors.New("invalid product unit")
 )

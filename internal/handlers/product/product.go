@@ -96,18 +96,54 @@ func (ph *ProductHandler) List(c *gin.Context) {
 }
 
 func (ph *ProductHandler) Update(c *gin.Context) {
+    var uriParams struct {
+        ID int `uri:"id"`
+    } 
+    
+    if err := c.ShouldBindUri(&uriParams); err != nil {
+        c.Status(http.StatusBadRequest)
+        return
+    }
+
 	var product Product
 
 	if err  := c.BindJSON(&product); err != nil {
 		return
 	}
 
-	// if err := product.Validate(); err != nil {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	// 	return
-	// }
+	item, err := ph.service.Update(
+		c, 
+		uriParams.ID,
+		product.Name,
+		product.Unit,
+		product.Type,
+	)
 
-	// c.IndentedJSON(http.StatusOK, products[len(products)-1])
+	if err != nil {
+		if errors.Is(err, entity.ErrProductNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, entity.ErrInvalidProductType) || 
+		   errors.Is(err, entity.ErrInvalidProductUnit) ||
+		   errors.Is(err, entity.ErrInvalidProductName) {
+			c.Status(http.StatusBadRequest)
+			return	
+		}
+
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	dto := Product{
+		ID: item.ID,
+		Name: item.Name,
+		Unit: item.Unit,
+		Type: item.TypeName,
+	}
+
+	c.IndentedJSON(http.StatusOK, dto)
 }
 
 func (ph *ProductHandler) Delete(c *gin.Context) {
@@ -146,7 +182,8 @@ func (ph *ProductHandler) Create(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, entity.ErrInvalidProductType) || 
-		   errors.Is(err, entity.ErrInvalidProductUnit) {
+		   errors.Is(err, entity.ErrInvalidProductUnit) ||
+		   errors.Is(err, entity.ErrInvalidProductName) {
 			c.Status(http.StatusBadRequest)
 			return	
 		}

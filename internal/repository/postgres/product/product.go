@@ -46,8 +46,33 @@ func (pr *ProductRepository) Add(ctx context.Context, name, unit, productType st
 	return &item, nil
 }
 
-func (pr *ProductRepository) Update(ctx context.Context, product entity.Product) (*entity.Product, error) {
-	return &products[len(products)-1], nil
+func (pr *ProductRepository) Update(ctx context.Context, id int, name, unit, productType string) (*entity.Product, error) {
+	var item entity.Product
+
+	err := pr.pool.QueryRow(
+		ctx, 
+		"UPDATE products SET name=$1, unit=$2, type=$3 WHERE id=$4 RETURNING id, name, unit, type", 
+		name, 
+		unit, 
+		productType,
+		id,
+	).Scan(
+		&item.ID,
+		&item.Name,
+		&item.Unit,
+		&item.TypeName,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, entity.ErrProductNotFound
+		}
+
+		log.Printf("ProductRepository::Update Error - %v", err)
+		return nil, err
+	}
+
+	return &item, nil
 }
 
 func (pr *ProductRepository) Delete(ctx context.Context, id int) error {
