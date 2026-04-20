@@ -5,6 +5,8 @@ CREATE TABLE counterparties (
     name VARCHAR(255) NOT NULL,
     role VARCHAR(8) NOT NULL CHECK (role IN ('supplier', 'buyer'))
 );
+
+CREATE UNIQUE INDEX idx_name ON counterparties(name);
 -- +goose StatementEnd
 
 -- +goose Down
