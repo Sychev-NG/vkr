@@ -3,7 +3,6 @@ package product
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"vkr/internal/entity"
 
@@ -112,9 +111,21 @@ func (ph *ProductHandler) Update(c *gin.Context) {
 }
 
 func (ph *ProductHandler) Delete(c *gin.Context) {
-	id := c.Param("id")
+    var uriParams struct {
+        ID int `uri:"id"`
+    } 
+    
+    if err := c.ShouldBindUri(&uriParams); err != nil {
+        c.Status(http.StatusBadRequest)
+        return
+    }
 
-	fmt.Println(id)
+	err := ph.service.Delete(c, uriParams.ID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
 	c.Status(http.StatusNoContent)
 }

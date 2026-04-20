@@ -53,5 +53,5 @@ func (ps *ProductService) Update(ctx context.Context, id int, name, unit, produc
 }
 
 func (ps *ProductService) Delete(ctx context.Context, id int) (error) {
-	return nil
+	return ps.saver.Delete(ctx, id)
 }

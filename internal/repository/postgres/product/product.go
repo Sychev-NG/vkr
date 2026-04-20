@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"errors"
+	"log"
 	"vkr/internal/entity"
 
 	"github.com/jackc/pgx/v5"
@@ -50,7 +51,11 @@ func (pr *ProductRepository) Update(ctx context.Context, product entity.Product)
 }
 
 func (pr *ProductRepository) Delete(ctx context.Context, id int) error {
-	return nil
+	_, err :=pr.pool.Exec(ctx, "DELETE FROM products WHERE id=$1", id)
+	if err != nil {
+		log.Printf("ProductRepository::Delete Error - %v", err)
+	}
+	return err
 }
 
 func (pr *ProductRepository) GetById(ctx context.Context, id int) (*entity.Product, error) {
