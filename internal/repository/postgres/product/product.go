@@ -2,8 +2,10 @@ package product
 
 import (
 	"context"
+	"errors"
 	"vkr/internal/entity"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,7 +19,7 @@ type ProductRepository struct {
 }
 
 func New(db *pgxpool.Pool) *ProductRepository {
-	return &ProductRepository{}
+	return &ProductRepository{pool: db}
 }
 
 func (pr *ProductRepository) Add(ctx context.Context, name, unit, productType string) (*entity.Product, error) {
@@ -33,7 +35,24 @@ func (pr *ProductRepository) Delete(ctx context.Context, id int) error {
 }
 
 func (pr *ProductRepository) GetById(ctx context.Context, id int) (*entity.Product, error) {
-	return &products[len(products)-1], nil
+    var item entity.Product
+
+    err := pr.pool.QueryRow(ctx, "SELECT id, name, unit, type FROM products WHERE id = $1", id).Scan(
+		&item.ID, 
+		&item.Name, 
+		&item.Unit, 
+		&item.TypeName,
+	)
+    
+    if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, entity.ErrProductNotFound
+		}
+
+        return nil, err
+    }
+        
+    return &item, nil
 }
 
 func (pr *ProductRepository) GetAll(ctx context.Context) ([]entity.Product, error) {

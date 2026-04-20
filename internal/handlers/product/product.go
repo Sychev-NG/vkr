@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"vkr/internal/entity"
@@ -65,8 +66,14 @@ func (ph *ProductHandler) Get(c *gin.Context) {
 	fmt.Println(uriParams.ID)
 
 	item, err := ph.service.GetById(c, uriParams.ID)
+
 	if err != nil {
-		c.Status(http.StatusBadRequest)
+		if errors.Is(err, entity.ErrProductNotFound) {
+			c.Status(http.StatusNotFound)
+			return			
+		}
+
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 	
