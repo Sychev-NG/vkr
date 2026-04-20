@@ -26,6 +26,16 @@ func New(ps ProductSaver, pp ProductProvider) *ProductService {
 }
 
 func (ps *ProductService) Add(ctx context.Context, name, unit, productType string) (*entity.Product, error) {
+	pt := entity.ProductType(productType)
+	if pt != entity.Raw && pt != entity.Finished {
+		return nil, entity.ErrInvalidProductType
+	}
+
+	pu := entity.ProductUnit(unit)
+	if pu != entity.KG {
+		return nil, entity.ErrInvalidProductUnit
+	}
+
 	return ps.saver.Add(ctx, name, unit, productType)	
 }
 

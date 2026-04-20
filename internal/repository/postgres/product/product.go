@@ -23,7 +23,26 @@ func New(db *pgxpool.Pool) *ProductRepository {
 }
 
 func (pr *ProductRepository) Add(ctx context.Context, name, unit, productType string) (*entity.Product, error) {
-	return &products[len(products)-1], nil
+	var item entity.Product
+
+	err := pr.pool.QueryRow(
+		ctx, 
+		"INSERT INTO products (name, unit, type) VALUES ($1, $2, $3) RETURNING id, name, unit, type", 
+		name, 
+		unit, 
+		productType,
+	).Scan(
+		&item.ID,
+		&item.Name,
+		&item.Unit,
+		&item.TypeName,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &item, nil
 }
 
 func (pr *ProductRepository) Update(ctx context.Context, product entity.Product) (*entity.Product, error) {

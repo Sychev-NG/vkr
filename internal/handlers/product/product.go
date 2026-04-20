@@ -10,28 +10,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ProductType string
-
-const (
-	Raw      ProductType = "raw"
-	Finished ProductType = "finished"
-)
-
 type Product struct {
 	ID   int		 `json:"id"`
 	Name string      `json:"name" binding:"required"`
 	Unit string      `json:"unit" binding:"required"`
-	Type ProductType `json:"type" binding:"required"` // raw/finished
+	Type string 	 `json:"type" binding:"required"`
 }
 
-func (p *Product) Validate() error {
-	switch p.Type {
-	case Raw, Finished:
-		return nil
-	default:
-		return fmt.Errorf("expected type '%s' or '%s', got '%s'", Raw, Finished, p.Type)
-	}
-}
+// func (p *Product) Validate() error {
+// 	switch p.Type {
+// 	case Raw, Finished:
+// 		return nil
+// 	default:
+// 		return fmt.Errorf("expected type '%s' or '%s', got '%s'", Raw, Finished, p.Type)
+// 	}
+// }
 
 type ProductServiceInterface interface {
 	Add(ctx context.Context, name, unit, typeName string) (*entity.Product, error)
@@ -75,7 +68,7 @@ func (ph *ProductHandler) Get(c *gin.Context) {
 		ID: item.ID,
 		Name: item.Name,
 		Unit: item.Unit,
-		Type: ProductType(item.TypeName),
+		Type: item.TypeName,
 	}
 
 	c.IndentedJSON(http.StatusOK, dto)
@@ -96,7 +89,7 @@ func (ph *ProductHandler) List(c *gin.Context) {
 			ID: item.ID,
 			Name: item.Name,
 			Unit: item.Unit,
-			Type: ProductType(item.TypeName),
+			Type: item.TypeName,
 		})
 	}
 
@@ -110,10 +103,10 @@ func (ph *ProductHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if err := product.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	// if err := product.Validate(); err != nil {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// 	return
+	// }
 
 	// c.IndentedJSON(http.StatusOK, products[len(products)-1])
 }
@@ -133,10 +126,30 @@ func (ph *ProductHandler) Create(c *gin.Context) {
 		return
 	}
 
-	if err := product.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	item, err := ph.service.Add(
+		c, 
+		product.Name,
+		product.Unit,
+		product.Type,
+	)
+
+	if err != nil {
+		if errors.Is(err, entity.ErrInvalidProductType) || 
+		   errors.Is(err, entity.ErrInvalidProductUnit) {
+			c.Status(http.StatusBadRequest)
+			return	
+		}
+
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	// c.IndentedJSON(http.StatusOK, products[len(products)-1])
+	dto := Product{
+		ID: item.ID,
+		Name: item.Name,
+		Unit: item.Unit,
+		Type: item.TypeName,
+	}
+
+	c.IndentedJSON(http.StatusOK, dto)
 }

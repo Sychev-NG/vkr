@@ -3,8 +3,8 @@
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    type VARCHAR(8) NOT NULL CHECK (TYPE IN ('raw', 'finished')),
-    unit VARCHAR(8) NOT NULL CHECK (TYPE IN ('kg'))
+    type VARCHAR(8) NOT NULL CHECK (type IN ('raw', 'finished')),
+    unit VARCHAR(8) NOT NULL CHECK (unit IN ('kg'))
 );
 -- +goose StatementEnd
 
