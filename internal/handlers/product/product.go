@@ -10,10 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ProductURIParams struct {
-	ID int `uri:"id"`
-}
-
 type ProductType string
 
 const (
@@ -62,8 +58,6 @@ func (ph *ProductHandler) Get(c *gin.Context) {
         c.Status(http.StatusBadRequest)
         return
     }
-
-	fmt.Println(uriParams.ID)
 
 	item, err := ph.service.GetById(c, uriParams.ID)
 

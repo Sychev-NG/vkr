@@ -56,5 +56,24 @@ func (pr *ProductRepository) GetById(ctx context.Context, id int) (*entity.Produ
 }
 
 func (pr *ProductRepository) GetAll(ctx context.Context) ([]entity.Product, error) {
-	return products, nil
+	var items []entity.Product
+
+	rows, err := pr.pool.Query(ctx, "SELECT id, name, unit, type FROM products")
+	if err != nil {
+		return items, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var item entity.Product
+		rows.Scan(
+			&item.ID, 
+			&item.Name, 
+			&item.Unit, 
+			&item.TypeName,
+		)
+		items = append(items, item)
+	}
+
+	return items, err
 }
