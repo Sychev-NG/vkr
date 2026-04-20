@@ -12,9 +12,15 @@ import (
 	"time"
 
 	"vkr/internal/config"
+
 	pHandler "vkr/internal/handlers/product"
 	pService "vkr/internal/service/product"
 	pRepo "vkr/internal/repository/postgres/product"
+
+	cpHandler "vkr/internal/handlers/counterparty"
+	cpService "vkr/internal/service/counterparty"
+	cpRepo "vkr/internal/repository/postgres/counterparty"
+
 	"vkr/internal/storage/postgres"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +30,7 @@ import (
 var dbPool *pgxpool.Pool
 
 var productHandler *pHandler.ProductHandler
+var counterpartyHandler *cpHandler.CounterpartyHandler
 
 func main() {
 	cfg := config.MustLoad()
@@ -43,6 +50,10 @@ func main() {
 	productRepository := pRepo.New(dbPool)
 	productService := pService.New(productRepository, productRepository)
 	productHandler = pHandler.New(productService)
+
+	counterpartyRepository := cpRepo.New(dbPool)
+	counterpartyService := cpService.New(counterpartyRepository, counterpartyRepository)
+	counterpartyHandler = cpHandler.New(counterpartyService)
 
 	err = dbPool.Ping(ctx)
 	fmt.Printf("Pinging DB %v", err)
@@ -98,11 +109,25 @@ func setupRouter() *gin.Engine {
 			return
 		})
 
-		api.GET("/product", productHandler.List)
-		api.GET("/product/:id", productHandler.Get)
-		api.POST("/product", productHandler.Create)
-		api.PATCH("/product/:id", productHandler.Update)
-		api.DELETE("/product/:id", productHandler.Delete)
+		// Группа товаров
+		productGroup := api.Group("/product")
+		{
+			productGroup.GET("/product", productHandler.List)
+			productGroup.GET("/product/:id", productHandler.Get)
+			productGroup.POST("/product", productHandler.Create)
+			productGroup.PATCH("/product/:id", productHandler.Update)
+			productGroup.DELETE("/product/:id", productHandler.Delete)
+		}
+
+        // Группа контрагентов
+        counterpartyGroup := api.Group("/counterparty")
+        {
+            counterpartyGroup.GET("", counterpartyHandler.List)
+            counterpartyGroup.GET("/:id", counterpartyHandler.Get)
+            counterpartyGroup.POST("", counterpartyHandler.Create)
+            counterpartyGroup.PATCH("/:id", counterpartyHandler.Update)
+            counterpartyGroup.DELETE("/:id", counterpartyHandler.Delete)
+        }
 	}
 
 	return router
