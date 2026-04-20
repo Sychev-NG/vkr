@@ -21,6 +21,10 @@ import (
 	cpService "vkr/internal/service/counterparty"
 	cpRepo "vkr/internal/repository/postgres/counterparty"
 
+	wHandler "vkr/internal/handlers/warehouses"
+	wService "vkr/internal/service/warehouse"
+	wRepo "vkr/internal/repository/postgres/warehouse"
+
 	"vkr/internal/storage/postgres"
 
 	"github.com/gin-gonic/gin"
@@ -31,6 +35,7 @@ var dbPool *pgxpool.Pool
 
 var productHandler *pHandler.ProductHandler
 var counterpartyHandler *cpHandler.CounterpartyHandler
+var warehouseHandler *wHandler.WarehouseHandler
 
 func main() {
 	cfg := config.MustLoad()
@@ -54,6 +59,10 @@ func main() {
 	counterpartyRepository := cpRepo.New(dbPool)
 	counterpartyService := cpService.New(counterpartyRepository, counterpartyRepository)
 	counterpartyHandler = cpHandler.New(counterpartyService)
+
+	warehouseRepository := wRepo.New(dbPool)
+	warehouseService := wService.New(warehouseRepository, warehouseRepository)
+	warehouseHandler = wHandler.New(warehouseService)
 
 	err = dbPool.Ping(ctx)
 	fmt.Printf("Pinging DB %v", err)
@@ -112,11 +121,11 @@ func setupRouter() *gin.Engine {
 		// Группа товаров
 		productGroup := api.Group("/product")
 		{
-			productGroup.GET("/product", productHandler.List)
-			productGroup.GET("/product/:id", productHandler.Get)
-			productGroup.POST("/product", productHandler.Create)
-			productGroup.PATCH("/product/:id", productHandler.Update)
-			productGroup.DELETE("/product/:id", productHandler.Delete)
+			productGroup.GET("", productHandler.List)
+			productGroup.GET("/:id", productHandler.Get)
+			productGroup.POST("", productHandler.Create)
+			productGroup.PATCH("/:id", productHandler.Update)
+			productGroup.DELETE("/:id", productHandler.Delete)
 		}
 
         // Группа контрагентов
@@ -127,6 +136,16 @@ func setupRouter() *gin.Engine {
             counterpartyGroup.POST("", counterpartyHandler.Create)
             counterpartyGroup.PATCH("/:id", counterpartyHandler.Update)
             counterpartyGroup.DELETE("/:id", counterpartyHandler.Delete)
+        }
+
+        // Группа складов
+        warehouseGroup := api.Group("/warehouse")
+        {
+            warehouseGroup.GET("", warehouseHandler.List)
+            warehouseGroup.GET("/:id", warehouseHandler.Get)
+            warehouseGroup.POST("", warehouseHandler.Create)
+            warehouseGroup.PATCH("/:id", warehouseHandler.Update)
+            warehouseGroup.DELETE("/:id", warehouseHandler.Delete)
         }
 	}
 
