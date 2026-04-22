@@ -25,6 +25,10 @@ import (
 	wService "vkr/internal/service/warehouse"
 	wRepo "vkr/internal/repository/postgres/warehouse"
 
+	rHandler "vkr/internal/handlers/recipe"
+	rService "vkr/internal/service/recipe"
+	rRepo "vkr/internal/repository/postgres/recipe"
+
 	"vkr/internal/storage/postgres"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +40,7 @@ var dbPool *pgxpool.Pool
 var productHandler *pHandler.ProductHandler
 var counterpartyHandler *cpHandler.CounterpartyHandler
 var warehouseHandler *wHandler.WarehouseHandler
+var recipeHandler *rHandler.RecipeHandler
 
 func main() {
 	cfg := config.MustLoad()
@@ -63,6 +68,10 @@ func main() {
 	warehouseRepository := wRepo.New(dbPool)
 	warehouseService := wService.New(warehouseRepository, warehouseRepository)
 	warehouseHandler = wHandler.New(warehouseService)
+
+	recipeRepository := rRepo.New(dbPool)
+	recipeService := rService.New(recipeRepository, recipeRepository, productRepository)
+	recipeHandler = rHandler.New(recipeService, productRepository)
 
 	err = dbPool.Ping(ctx)
 	fmt.Printf("Pinging DB %v", err)
@@ -146,6 +155,16 @@ func setupRouter() *gin.Engine {
             warehouseGroup.POST("", warehouseHandler.Create)
             warehouseGroup.PATCH("/:id", warehouseHandler.Update)
             warehouseGroup.DELETE("/:id", warehouseHandler.Delete)
+        }
+
+        // Группа рецептов
+        recipeGroup := api.Group("/recipe")
+        {
+            recipeGroup.GET("", recipeHandler.List)
+            recipeGroup.GET("/:id", recipeHandler.Get)
+            recipeGroup.POST("", recipeHandler.Create)
+            recipeGroup.PATCH("/:id", recipeHandler.Update)
+            recipeGroup.DELETE("/:id", recipeHandler.Delete)
         }
 	}
 
