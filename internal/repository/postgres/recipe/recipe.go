@@ -8,21 +8,27 @@ import (
 	"vkr/internal/entity"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type RecipeRepository struct {
-	pool *pgxpool.Pool
+type QueryExecutor interface {
+    QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+    Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
+    Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 }
 
-func New(db *pgxpool.Pool) *RecipeRepository {
-	return &RecipeRepository{pool: db}
+type RecipeRepository struct {
+	db QueryExecutor
+}
+
+func New(db QueryExecutor) *RecipeRepository {
+	return &RecipeRepository{db: db}
 }
 
 func (pr *RecipeRepository) GetById(ctx context.Context, id int) (*entity.Recipe, error) {
 	var item entity.Recipe
 
-    err := pr.pool.QueryRow(ctx, "SELECT id, product_id, name FROM recipes WHERE id = $1", id).Scan(
+    err := pr.db.QueryRow(ctx, "SELECT id, product_id, name FROM recipes WHERE id = $1", id).Scan(
 		&item.ID, 
 		&item.ProductID, 
 		&item.Name, 
@@ -52,7 +58,7 @@ func (pr *RecipeRepository) GetById(ctx context.Context, id int) (*entity.Recipe
 func (pr *RecipeRepository) GetByProductId(ctx context.Context, id int) (*entity.Recipe, error) {
 	var item entity.Recipe
 
-    err := pr.pool.QueryRow(ctx, "SELECT id, product_id, name FROM recipes WHERE product_id = $1", id).Scan(
+    err := pr.db.QueryRow(ctx, "SELECT id, product_id, name FROM recipes WHERE product_id = $1", id).Scan(
 		&item.ID, 
 		&item.ProductID, 
 		&item.Name, 
@@ -82,7 +88,7 @@ func (pr *RecipeRepository) GetByProductId(ctx context.Context, id int) (*entity
 func (pr *RecipeRepository) GetIngredientsByRecipeId(ctx context.Context, id int) ([]entity.RecipeIngredient, error) {
 	var items []entity.RecipeIngredient
 
-	rows, err := pr.pool.Query(ctx, "SELECT id, recipe_id, raw_material_id, quantity_per_unit FROM recipe_ingredients WHERE recipe_id=$1", id)
+	rows, err := pr.db.Query(ctx, "SELECT id, recipe_id, raw_material_id, quantity_per_unit FROM recipe_ingredients WHERE recipe_id=$1", id)
 	
 	if err != nil {
 		log.Printf("RecipeRepository::GetIngredientsByRecipeId Error - %v", err)
@@ -107,7 +113,7 @@ func (pr *RecipeRepository) GetIngredientsByRecipeId(ctx context.Context, id int
 func (pr *RecipeRepository) GetAll(ctx context.Context) ([]entity.Recipe, error) {
 	var items []entity.Recipe
 
-	rows, err := pr.pool.Query(ctx, "SELECT id, product_id, name FROM recipes")
+	rows, err := pr.db.Query(ctx, "SELECT id, product_id, name FROM recipes")
 	if err != nil {
 		log.Printf("RecipeRepository::GetAll Error - %v", err)
 		return items, err
@@ -121,6 +127,15 @@ func (pr *RecipeRepository) GetAll(ctx context.Context) ([]entity.Recipe, error)
 			&item.ProductID, 
 			&item.Name, 
 		)
+
+		ingredients, err := pr.GetIngredientsByRecipeId(ctx, item.ID)
+		if err != nil {
+			log.Printf("RecipeRepository::GetAll GetIngredientsByRecipeId Error - %v", err)
+			return nil, err
+		}
+
+		item.Ingredients = ingredients
+
 		items = append(items, item)
 	}
 
@@ -137,14 +152,6 @@ func (pr *RecipeRepository) Add(ctx context.Context, vo entity.UpsertRecipeVO) (
 	if item != nil {
 		return nil, entity.ErrRecipeDuplicateFound
 	}
-
-	tx, err := pr.pool.BeginTx(ctx, pgx.TxOptions{})
-	if	err != nil {
-		log.Printf("RecipeRepository::Add BeginTx Error - %v", err)
-		return nil, err
-	}
-
-	defer tx.Rollback(ctx)
 
 	recipeId, err := pr.addReceipe(ctx, vo.Name, vo.ProductID)
 	if err != nil {
@@ -166,17 +173,12 @@ func (pr *RecipeRepository) Add(ctx context.Context, vo entity.UpsertRecipeVO) (
 		return nil, err
 	}
 
-	err = tx.Commit(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	return result, nil
 }
 
 func (pr *RecipeRepository) addReceipe(ctx context.Context, name string, product_id int) (int, error) {
 	var recipeId int
-	err := pr.pool.QueryRow(
+	err := pr.db.QueryRow(
 		ctx, 
 		"INSERT INTO recipes (name, product_id) VALUES ($1, $2) RETURNING id", 
 		name, 
@@ -195,7 +197,7 @@ func (pr *RecipeRepository) addReceipe(ctx context.Context, name string, product
 
 func (pr *RecipeRepository) addReceipeIngredient(ctx context.Context, recipe_id, raw_material_id int, quantity_per_unit float32) (int, error) {
 	var ingredientId int
-	err := pr.pool.QueryRow(
+	err := pr.db.QueryRow(
 		ctx, 
 		"INSERT INTO recipe_ingredients (recipe_id, raw_material_id, quantity_per_unit) VALUES ($1, $2, $3) RETURNING id", 
 		recipe_id, 
@@ -218,14 +220,6 @@ func (pr *RecipeRepository) Update(ctx context.Context, id int, vo entity.Upsert
 		log.Printf("RecipeRepository::Update GetById Error - %v", err)
 		return nil, err
 	}
-
-	tx, err := pr.pool.BeginTx(ctx, pgx.TxOptions{})
-	if	err != nil {
-		log.Printf("RecipeRepository::Update BeginTx Error - %v", err)
-		return nil, err
-	}
-
-	defer tx.Rollback(ctx)
 
 	err = pr.deleteIngredients(ctx, id)
 	if	err != nil {
@@ -253,18 +247,13 @@ func (pr *RecipeRepository) Update(ctx context.Context, id int, vo entity.Upsert
 		return nil, err
 	}
 
-	err = tx.Commit(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	return result, nil
 }
 
 func (pr *RecipeRepository) updateReceipe(ctx context.Context, recipe_id int, name string, product_id int) error {
 	var recipeId int
 
-	err := pr.pool.QueryRow(
+	err := pr.db.QueryRow(
 		ctx, 
 		"UPDATE recipes SET name=$1, product_id=$2 WHERE id=$3 RETURNING id", 
 		name, 
@@ -283,7 +272,7 @@ func (pr *RecipeRepository) updateReceipe(ctx context.Context, recipe_id int, na
 }
 
 func (pr *RecipeRepository) Delete(ctx context.Context, id int) error {
-	_, err :=pr.pool.Exec(ctx, "DELETE FROM recipes WHERE id=$1", id)
+	_, err := pr.db.Exec(ctx, "DELETE FROM recipes WHERE id=$1", id)
 	if err != nil {
 		log.Printf("RecipeRepository::Delete Error - %v", err)
 	}
@@ -291,7 +280,7 @@ func (pr *RecipeRepository) Delete(ctx context.Context, id int) error {
 }
 
 func (pr *RecipeRepository) deleteIngredients(ctx context.Context, recipe_id int) error {
-	_, err :=pr.pool.Exec(ctx, "DELETE FROM recipe_ingredients WHERE recipe_id=$1", recipe_id)
+	_, err := pr.db.Exec(ctx, "DELETE FROM recipe_ingredients WHERE recipe_id=$1", recipe_id)
 	if err != nil {
 		log.Printf("RecipeRepository::Delete Error - %v", err)
 	}

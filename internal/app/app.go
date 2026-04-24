@@ -97,7 +97,7 @@ func (app *App) initService() {
 	app.ProductService = pService.New(app.ProductRepository, app.ProductRepository)
 	app.CounterPartyService = cpService.New(app.CounterPartyRepository, app.CounterPartyRepository)
 	app.WarehouseService = wService.New(app.WarehouseRepository, app.WarehouseRepository)
-	app.RecipeService = rService.New(app.RecipeRepository, app.RecipeRepository, app.ProductRepository)
+	app.RecipeService = rService.New(app.TxMan, app.RecipeRepository, app.RecipeRepository, app.ProductRepository)
 	app.StockService = sService.New(app.StockRepository, app.StockRepository, app.ProductRepository)
 	app.MovementService = mService.New(app.MovementRepository, app.MovementRepository, app.ProductRepository)
 	// incomingService := iService.New(incomingRepository, incomingRepository, app.ProductRepository)
