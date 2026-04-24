@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,70 +10,24 @@ import (
 	"syscall"
 	"time"
 
+	"vkr/internal/app"
 	"vkr/internal/config"
 
-	pHandler "vkr/internal/handlers/product"
-	pService "vkr/internal/service/product"
-	pRepo "vkr/internal/repository/postgres/product"
-
-	cpHandler "vkr/internal/handlers/counterparty"
-	cpService "vkr/internal/service/counterparty"
-	cpRepo "vkr/internal/repository/postgres/counterparty"
-
-	wHandler "vkr/internal/handlers/warehouses"
-	wService "vkr/internal/service/warehouse"
-	wRepo "vkr/internal/repository/postgres/warehouse"
-
-	rHandler "vkr/internal/handlers/recipe"
-	rService "vkr/internal/service/recipe"
-	rRepo "vkr/internal/repository/postgres/recipe"
-
-	"vkr/internal/storage/postgres"
-
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var dbPool *pgxpool.Pool
-
-var productHandler *pHandler.ProductHandler
-var counterpartyHandler *cpHandler.CounterpartyHandler
-var warehouseHandler *wHandler.WarehouseHandler
-var recipeHandler *rHandler.RecipeHandler
+var Application *app.App
 
 func main() {
 	cfg := config.MustLoad()
 	log.Println("Config is loaded")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	var err error
 
-	dbPool, err = postgres.NewPool(ctx, *cfg)
+	Application, err = app.New(cfg)
 	if err != nil {
-		log.Fatal("Failed to init DB: %v", err)
+		log.Fatal(err)
 	}
-	log.Println("Connection to DB is set")
-
-	productRepository := pRepo.New(dbPool)
-	productService := pService.New(productRepository, productRepository)
-	productHandler = pHandler.New(productService)
-
-	counterpartyRepository := cpRepo.New(dbPool)
-	counterpartyService := cpService.New(counterpartyRepository, counterpartyRepository)
-	counterpartyHandler = cpHandler.New(counterpartyService)
-
-	warehouseRepository := wRepo.New(dbPool)
-	warehouseService := wService.New(warehouseRepository, warehouseRepository)
-	warehouseHandler = wHandler.New(warehouseService)
-
-	recipeRepository := rRepo.New(dbPool)
-	recipeService := rService.New(recipeRepository, recipeRepository, productRepository)
-	recipeHandler = rHandler.New(recipeService, productRepository)
-
-	err = dbPool.Ping(ctx)
-	fmt.Printf("Pinging DB %v", err)
 
 	r := setupRouter()
 	
@@ -104,10 +57,7 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
-	if dbPool != nil {
-		dbPool.Close()
-		log.Println("Database is closed")
-	}
+	defer Application.Close()
 }
 
 func setupRouter() *gin.Engine {
@@ -117,55 +67,79 @@ func setupRouter() *gin.Engine {
 	{
 		api.GET("/health", func(c *gin.Context) {
 			ctx := context.Background()
-			err := dbPool.Ping(ctx)
+			err := Application.DB.Ping(ctx)
 			if err != nil {
 				c.Status(501)
 				return				
 			}
 
 			c.Status(200)
-			return
 		})
 
 		// Группа товаров
 		productGroup := api.Group("/product")
 		{
-			productGroup.GET("", productHandler.List)
-			productGroup.GET("/:id", productHandler.Get)
-			productGroup.POST("", productHandler.Create)
-			productGroup.PATCH("/:id", productHandler.Update)
-			productGroup.DELETE("/:id", productHandler.Delete)
+			productGroup.GET("", Application.ProductHandler.List)
+			productGroup.GET("/:id", Application.ProductHandler.Get)
+			productGroup.POST("", Application.ProductHandler.Create)
+			productGroup.PATCH("/:id", Application.ProductHandler.Update)
+			productGroup.DELETE("/:id", Application.ProductHandler.Delete)
 		}
 
         // Группа контрагентов
         counterpartyGroup := api.Group("/counterparty")
         {
-            counterpartyGroup.GET("", counterpartyHandler.List)
-            counterpartyGroup.GET("/:id", counterpartyHandler.Get)
-            counterpartyGroup.POST("", counterpartyHandler.Create)
-            counterpartyGroup.PATCH("/:id", counterpartyHandler.Update)
-            counterpartyGroup.DELETE("/:id", counterpartyHandler.Delete)
+            counterpartyGroup.GET("", Application.CounterPartyHandler.List)
+            counterpartyGroup.GET("/:id", Application.CounterPartyHandler.Get)
+            counterpartyGroup.POST("", Application.CounterPartyHandler.Create)
+            counterpartyGroup.PATCH("/:id", Application.CounterPartyHandler.Update)
+            counterpartyGroup.DELETE("/:id", Application.CounterPartyHandler.Delete)
         }
 
         // Группа складов
         warehouseGroup := api.Group("/warehouse")
         {
-            warehouseGroup.GET("", warehouseHandler.List)
-            warehouseGroup.GET("/:id", warehouseHandler.Get)
-            warehouseGroup.POST("", warehouseHandler.Create)
-            warehouseGroup.PATCH("/:id", warehouseHandler.Update)
-            warehouseGroup.DELETE("/:id", warehouseHandler.Delete)
+            warehouseGroup.GET("", Application.WarehouseHandler.List)
+            warehouseGroup.GET("/:id", Application.WarehouseHandler.Get)
+            warehouseGroup.POST("", Application.WarehouseHandler.Create)
+            warehouseGroup.PATCH("/:id", Application.WarehouseHandler.Update)
+            warehouseGroup.DELETE("/:id", Application.WarehouseHandler.Delete)
         }
 
         // Группа рецептов
         recipeGroup := api.Group("/recipe")
         {
-            recipeGroup.GET("", recipeHandler.List)
-            recipeGroup.GET("/:id", recipeHandler.Get)
-            recipeGroup.POST("", recipeHandler.Create)
-            recipeGroup.PATCH("/:id", recipeHandler.Update)
-            recipeGroup.DELETE("/:id", recipeHandler.Delete)
+            recipeGroup.GET("", Application.RecipeHandler.List)
+            recipeGroup.GET("/:id", Application.RecipeHandler.Get)
+            recipeGroup.POST("", Application.RecipeHandler.Create)
+            recipeGroup.PATCH("/:id", Application.RecipeHandler.Update)
+            recipeGroup.DELETE("/:id", Application.RecipeHandler.Delete)
         }
+
+		stocksGroup := api.Group("/stocks")
+		{
+			stocksGroup.GET("", Application.StockHandler.List)
+		}
+
+		movementsGroup := api.Group("/movements")
+		{
+			movementsGroup.GET("", Application.MovementHandler.List)
+		}
+
+		// incomingGroup := api.Group("/incoming")
+		// {
+		// 	incomingGroup.POST("", Application.IncomingHandler.Create)
+		// }
+
+		// productionGroup := api.Group("/production")
+		// {
+		// 	productionGroup.POST("", productionHandler.Ceate)
+		// }
+
+		// outgoingGroup := api.Group("/outgoing")
+		// {
+		// 	outgoingGroup.POST("", outgoingHandler.Ceate)
+		// }
 	}
 
 	return router
