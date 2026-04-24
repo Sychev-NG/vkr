@@ -126,10 +126,10 @@ func setupRouter() *gin.Engine {
 			movementsGroup.GET("", Application.MovementHandler.List)
 		}
 
-		// incomingGroup := api.Group("/incoming")
-		// {
-		// 	incomingGroup.POST("", Application.IncomingHandler.Create)
-		// }
+		incomingGroup := api.Group("/incoming")
+		{
+			incomingGroup.POST("", Application.IncomingHandler.Create)
+		}
 
 		// productionGroup := api.Group("/production")
 		// {

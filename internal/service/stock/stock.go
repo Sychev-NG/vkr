@@ -2,6 +2,7 @@ package stock
 
 import (
 	"context"
+	"log"
 
 	"vkr/internal/entity"
 	"vkr/internal/entity/document"
@@ -54,10 +55,17 @@ func (ss *StockService) Add(ctx context.Context, docVO document.Document, produc
 	err := ss.txManager.RunInTx(ctx, func(txCtx context.Context) error {
 		err := ss.stockRepo.Increase(txCtx, product_id, warehouse_id, quantity)
 		if err != nil {
+			log.Printf("StockService::Add Increase Error - %v", err.Error())
 			return err
 		}
 
-		ss.movingkRepo.RegisterIncoming(txCtx, docVO, product_id, warehouse_id, quantity)
+		movement, err := ss.movingkRepo.RegisterIncoming(txCtx, docVO, product_id, warehouse_id, quantity)
+		if err != nil {
+			log.Printf("StockService::Add RegisterIncoming Error - %v", err.Error())
+			return err
+		}
+
+		log.Printf("StockService::Add RegisterIncoming result - %v", movement)
 
 		return nil
 	})

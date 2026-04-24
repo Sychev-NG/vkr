@@ -55,7 +55,7 @@ func (r *IncomingRepository) createDocument(ctx context.Context, warehouse_id, c
     
     err := r.db.QueryRow(ctx, `
         INSERT INTO incoming_docs (counterparty_id, warehouse_id, date) 
-        VALUES ($1, $2, $3, $4) 
+        VALUES ($1, $2, $3) 
         RETURNING id`,
         cpunterparty_id,
         warehouse_id,
@@ -75,7 +75,7 @@ func (r *IncomingRepository) createDocumentItem(ctx context.Context, documentId 
 
     err := r.db.QueryRow(ctx, `
         INSERT INTO incoming_doc_items (document_id, product_id, quantity, price) 
-        VALUES ($1, $2, $3) 
+        VALUES ($1, $2, $3, $4) 
         RETURNING id`,
         documentId,
         raw_material_id,
@@ -93,17 +93,15 @@ func (r *IncomingRepository) createDocumentItem(ctx context.Context, documentId 
 
 func (r *IncomingRepository) GetById(ctx context.Context, id int) (*incoming.IncomingDocument, error) {
     var doc incoming.IncomingDocument
-    var status string
 
     err := r.db.QueryRow(ctx, `
-        SELECT id, counterparty_id, warehouse_id, status, date 
+        SELECT id, counterparty_id, warehouse_id, date 
         FROM incoming_docs 
         WHERE id = $1`, id,
     ).Scan(
         &doc.ID,
         &doc.CounterPartyID,
         &doc.WarehouseID,
-        &status,
         &doc.Date,
     )
 
@@ -130,7 +128,7 @@ func (r *IncomingRepository) getItems(ctx context.Context, documentId int) ([]in
     var items []incoming.IncomingDocumentItem
 
     rows, err := r.db.Query(ctx, `
-        SELECT id, document_id, product_id, quantity , price
+        SELECT id, product_id, quantity, price
         FROM incoming_doc_items 
         WHERE document_id = $1
         ORDER BY id`, documentId,

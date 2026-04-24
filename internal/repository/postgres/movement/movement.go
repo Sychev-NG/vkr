@@ -57,7 +57,7 @@ func (pr *MovementRepository) GetById(ctx context.Context, id int) (*entity.Move
 func (pr *MovementRepository) GetAll(ctx context.Context) ([]entity.Movement, error) {
 	var items []entity.Movement
 
-	rows, err := pr.db.Query(ctx, "SELECT id, product_id, warehouse_id, document_id, quantity, date FROM movements")
+	rows, err := pr.db.Query(ctx, "SELECT id, product_id, warehouse_id, document_id, document_type, quantity, date FROM movements")
 	if err != nil {
 		log.Printf("MovementRepository::GetAll Error - %v", err)
 		return items, err
@@ -66,14 +66,19 @@ func (pr *MovementRepository) GetAll(ctx context.Context) ([]entity.Movement, er
 
 	for rows.Next() {
 		var item entity.Movement
+		var typeName string
 		rows.Scan(
 			&item.ID, 
 			&item.ProductID, 
 			&item.WarehouseID, 
 			&item.DocumentID, 
+			&typeName, 
 			&item.Quantity,
 			&item.Date,
 		)
+
+		item.DocumentType = entity.DocumentType(typeName)
+
 		items = append(items, item)
 	}
 
@@ -84,7 +89,7 @@ func (pr *MovementRepository) GetByFilter(ctx context.Context, filter entity.Mov
 	var items []entity.Movement
 
 	var query strings.Builder
-	query.WriteString("SELECT id, product_id, warehouse_id, document_id, quantity, date FROM movements WHERE 1=1")
+	query.WriteString("SELECT id, product_id, warehouse_id, document_id, document_type, quantity, date FROM movements WHERE 1=1")
 	
 	args := []interface{}{}
 	
@@ -107,14 +112,19 @@ func (pr *MovementRepository) GetByFilter(ctx context.Context, filter entity.Mov
 
 	for rows.Next() {
 		var item entity.Movement
+		var typeName string
 		rows.Scan(
 			&item.ID, 
 			&item.ProductID, 
 			&item.WarehouseID, 
 			&item.DocumentID, 
+			&typeName,
 			&item.Quantity, 
 			&item.Date, 
 		)
+
+		item.DocumentType = entity.DocumentType(typeName)
+
 		items = append(items, item)
 	}
 
@@ -125,7 +135,7 @@ func (pr *MovementRepository) RegisterIncoming(ctx context.Context, docVO docume
 
 	err := pr.db.QueryRow(
 		ctx, 
-		"INSERT INTO products (product_id, warehouse_id, document_id, document_type, quantity, date) VALUES ($1, $2, $3, $4, $5) RETURNING id, product_id, warehouse_id, document_id, document_type, quantity, date", 
+		"INSERT INTO movements (product_id, warehouse_id, document_id, document_type, quantity, date) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, product_id, warehouse_id, document_id, document_type, quantity, date", 
 		product_id, 
 		warehouse_id, 
 		docVO.DocumentID,

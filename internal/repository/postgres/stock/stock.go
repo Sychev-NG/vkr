@@ -156,7 +156,7 @@ func (pr *StockRepository) GetByFilter(ctx context.Context, filter entity.StockF
 
 func (pr *StockRepository) Increase(ctx context.Context, product_id, warehouse_id int, quantity float32) error {    
 	stock, err := pr.GetByProductAndWarehouseId(ctx, product_id, warehouse_id)   
-    if err != nil {
+    if err != nil && !errors.Is(err, entity.ErrStockNotFound) {
         return err
     }
 

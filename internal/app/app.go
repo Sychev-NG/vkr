@@ -122,7 +122,7 @@ func (app *App) initHandlers() {
 	app.RecipeHandler = rHandler.New(app.RecipeService, app.ProductRepository)
 	app.StockHandler = sHandler.New(app.StockService, app.ProductRepository, app.WarehouseRepository)
 	app.MovementHandler = mHandler.New(app.MovementService, app.ProductRepository, app.WarehouseRepository)
-	// app.IncomingHandler = iHandler.New(/*incomingйService, productRepository, warehouseRepository*/)
+	app.IncomingHandler = iHandler.New(app.IncomingService, app.ProductRepository)
 }
 
 func (app *App) initRepos() {
