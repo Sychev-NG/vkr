@@ -1,9 +1,14 @@
 package postgres
 
 import (
-    "context"
-    "github.com/jackc/pgx/v5/pgxpool"
+	"context"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type txKey struct{}
 
 type TransactionManager struct {
     pool *pgxpool.Pool
@@ -14,12 +19,16 @@ func NewTransactionManager(pool *pgxpool.Pool) *TransactionManager {
 }
 
 func (tm *TransactionManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
-    tx, err := tm.pool.Begin(ctx)
-    if err != nil {
-        return err
+    if tx, ok := ctx.Value(txKey{}).(pgx.Tx); ok && tx != nil {
+        return fn(ctx)
     }
     
-    txCtx := context.WithValue(ctx, "tx", tx)
+    tx, err := tm.pool.Begin(ctx)
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    
+    txCtx := context.WithValue(ctx, txKey{}, tx)
     
     defer func() {
         if p := recover(); p != nil {
@@ -33,5 +42,14 @@ func (tm *TransactionManager) RunInTx(ctx context.Context, fn func(ctx context.C
         return err
     }
     
-    return tx.Commit(ctx)
+    if err := tx.Commit(ctx); err != nil {
+        return fmt.Errorf("failed to commit transaction: %w", err)
+    }
+    
+    return nil
+}
+
+func GetTx(ctx context.Context) (pgx.Tx, bool) {
+    tx, ok := ctx.Value(txKey{}).(pgx.Tx)
+    return tx, ok
 }

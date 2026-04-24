@@ -5,6 +5,7 @@ CREATE TABLE movements (
     product_id INTEGER NOT NULL,
     warehouse_id INTEGER NOT NULL,
     document_id INTEGER NOT NULL,
+    document_type VARCHAR(10) NOT NULL,
     quantity DECIMAL(12, 4) NOT NULL CHECK (quantity > 0),
     date TIMESTAMP NOT NULL DEFAULT NOW()
 );

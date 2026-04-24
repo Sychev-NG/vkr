@@ -4,7 +4,6 @@ CREATE TABLE incoming_docs (
     id SERIAL PRIMARY KEY,
     counterparty_id INTEGER NOT NULL,
     warehouse_id INTEGER NOT NULL,
-    status VARCHAR(10) NOT NULL,
     date TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE TABLE incoming_doc_items (
@@ -19,7 +18,6 @@ CREATE TABLE outgoing_docs (
     id SERIAL PRIMARY KEY,
     counterparty_id INTEGER NOT NULL,
     warehouse_id INTEGER NOT NULL,
-    status VARCHAR(10) NOT NULL,
     date TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE TABLE outgoing_doc_items (
@@ -33,7 +31,6 @@ CREATE TABLE outgoing_doc_items (
 CREATE TABLE production_docs (
     id SERIAL PRIMARY KEY,
     warehouse_id INTEGER NOT NULL,
-    status VARCHAR(10) NOT NULL,
     date TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE TABLE production_doc_items (
@@ -47,12 +44,12 @@ CREATE TABLE production_doc_items (
 
 -- +goose Down
 -- +goose StatementBegin
-DROP TABLE IF EXISTS incoming_docs;
 DROP TABLE IF EXISTS incoming_doc_items;
+DROP TABLE IF EXISTS incoming_docs;
 
-DROP TABLE IF EXISTS outgoing_docs;
 DROP TABLE IF EXISTS outgoing_doc_items;
+DROP TABLE IF EXISTS outgoing_docs;
 
-DROP TABLE IF EXISTS production_docs;
 DROP TABLE IF EXISTS production_doc_items;
+DROP TABLE IF EXISTS production_docs;
 -- +goose StatementEnd

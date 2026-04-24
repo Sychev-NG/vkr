@@ -33,6 +33,8 @@ import (
 	mService "vkr/internal/service/movement"
 
 	iHandler "vkr/internal/handlers/incoming"
+	iService "vkr/internal/service/document/incoming"
+	iRepo "vkr/internal/repository/postgres/document/incoming"
 )
 
 type App struct {
@@ -47,6 +49,7 @@ type App struct {
 	RecipeService *rService.RecipeService
 	StockService *sService.StockService
 	MovementService *mService.MovementService
+	IncomingService *iService.IncomingDocumentService
 
 	ProductHandler *pHandler.ProductHandler
 	CounterPartyHandler *cpHandler.CounterpartyHandler
@@ -62,6 +65,7 @@ type App struct {
 	RecipeRepository *rRepo.RecipeRepository
 	StockRepository *sRepo.StockRepository
 	MovementRepository *mRepo.MovementRepository
+	IncomingRepository *iRepo.IncomingRepository
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -98,9 +102,17 @@ func (app *App) initService() {
 	app.CounterPartyService = cpService.New(app.CounterPartyRepository, app.CounterPartyRepository)
 	app.WarehouseService = wService.New(app.WarehouseRepository, app.WarehouseRepository)
 	app.RecipeService = rService.New(app.TxMan, app.RecipeRepository, app.RecipeRepository, app.ProductRepository)
-	app.StockService = sService.New(app.StockRepository, app.StockRepository, app.ProductRepository)
+	app.StockService = sService.New(app.TxMan, app.StockRepository, app.MovementRepository, app.ProductRepository)
 	app.MovementService = mService.New(app.MovementRepository, app.MovementRepository, app.ProductRepository)
-	// incomingService := iService.New(incomingRepository, incomingRepository, app.ProductRepository)
+	app.IncomingService = iService.New(
+		app.TxMan, 
+		app.IncomingRepository, 
+		app.IncomingRepository, 
+		app.ProductRepository,
+		app.WarehouseRepository, 
+		app.CounterPartyRepository, 
+		app.StockService, 
+	)
 }
 
 func (app *App) initHandlers() {
@@ -120,7 +132,7 @@ func (app *App) initRepos() {
 	app.RecipeRepository = rRepo.New(app.DB)
 	app.StockRepository = sRepo.New(app.DB)
 	app.MovementRepository = mRepo.New(app.DB)
-	// app.IncomingRepository = iRepo.New(app.DB)
+	app.IncomingRepository = iRepo.New(app.DB)
 }
 
 func (app *App) Close() {
