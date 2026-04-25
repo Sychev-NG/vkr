@@ -55,6 +55,11 @@ func (ps *StockService) GetByFilter(ctx context.Context, filter entity.StockFilt
 	return sRepo.GetByFilter(ctx, filter)
 }
 
+func (ps *StockService) GetByProductAndWarehouseId(ctx context.Context, product_id, warhouse_id int) (*entity.Stock, error) {
+	sRepo := ps.f.NewStockRepository(ctx)
+	return sRepo.GetByProductAndWarehouseId(ctx, product_id, warhouse_id)
+}
+
 func (ss *StockService) Add(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) error {
 	if quantity <= 0 {
 		return entity.ErrInvalidQuantity

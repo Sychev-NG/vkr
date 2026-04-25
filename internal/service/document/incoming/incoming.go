@@ -76,7 +76,7 @@ func (s *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertInc
 		return incoming.ErrInvalidSupplier
 	}
 
-	_, err = s.warehouseProvider.GetById(ctx, vo.CounterPartyID)
+	_, err = s.warehouseProvider.GetById(ctx, vo.WarehouseID)
 	if err != nil {
 		return err
 	}

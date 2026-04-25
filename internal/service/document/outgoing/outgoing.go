@@ -37,6 +37,7 @@ type CounterpartyProvider interface {
 
 type StockService interface {
 	Add(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) error
+	Remove(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) error
 }
 
 type RepoFactory interface {
@@ -76,7 +77,7 @@ func (s *OutgoingDocumentService) Add(ctx context.Context, vo outgoing.UpsertOut
 		return outgoing.ErrInvalidBuyer
 	}
 
-	_, err = s.warehouseProvider.GetById(ctx, vo.CounterPartyID)
+	_, err = s.warehouseProvider.GetById(ctx, vo.WarehouseID)
 	if err != nil {
 		return err
 	}
@@ -106,9 +107,9 @@ func (s *OutgoingDocumentService) Add(ctx context.Context, vo outgoing.UpsertOut
 		}
 
 		for _, rawMaterial := range vo.Items {
-			err := s.stockService.Add(txCtx, document.ToDocument(), rawMaterial.FinishedMaterialID, vo.WarehouseID, rawMaterial.Quantity)
+			err := s.stockService.Remove(txCtx, document.ToDocument(), rawMaterial.FinishedMaterialID, vo.WarehouseID, rawMaterial.Quantity)
 			if err != nil {
-				log.Printf("OutgoingDocumentService::Add stockService.Add Error - %v", err)
+				log.Printf("OutgoingDocumentService::Add stockService.Remove Error - %v", err)
 				return err				
 			}
 		}

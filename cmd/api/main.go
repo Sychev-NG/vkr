@@ -131,10 +131,10 @@ func setupRouter() *gin.Engine {
 			incomingGroup.POST("", Application.IncomingHandler.Create)
 		}
 
-		// productionGroup := api.Group("/production")
-		// {
-		// 	productionGroup.POST("", productionHandler.Ceate)
-		// }
+		productionGroup := api.Group("/production")
+		{
+			productionGroup.POST("", Application.ProductionHandler.Create)
+		}
 
 		// outgoingGroup := api.Group("/outgoing")
 		// {

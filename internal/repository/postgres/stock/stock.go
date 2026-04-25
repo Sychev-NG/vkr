@@ -184,7 +184,22 @@ func (pr *StockRepository) Increase(ctx context.Context, product_id, warehouse_i
 }
 
 func (pr *StockRepository) Decrease(ctx context.Context, product_id, warehouse_id int, quantity float32) error {
-	return nil
+	stock, err := pr.GetByProductAndWarehouseId(ctx, product_id, warehouse_id)   
+    if err != nil {
+		log.Printf("ProductRepository::Decrease GetByProductAndWarehouseId Error - %v", err)
+        return err
+    }
+
+	if stock != nil {
+		// Update
+		_, err = pr.updateQuantity(ctx, stock.ID, stock.Quantity - quantity)
+		if err != nil {
+			log.Printf("ProductRepository::Decrease updateQuantity Error - %v", err)
+        	return err
+    	}
+	}
+    
+    return nil
 }
 
 func (pr *StockRepository) Add(ctx context.Context, product_id, warehouse_id int, quantity float32) (*entity.Stock, error) {

@@ -11,30 +11,16 @@ import (
 )
 
 type UpsertProduction struct {
-	WarehouseID		int 					`json:"warehouse_id" binding:"required"`
-	Items 			[]UpsertProductionItem 	`json:"items" binding:"required"`
-}
-
-type UpsertProductionItem struct {
-	FinishedMaterialID 	int 		`json:"product_id" binding:"required"`
-	RecipeID 			int 		`json:"recipe_id" binding:"required"`
-	Quantity 			float32		`json:"quantity" binding:"required"`
+	WarehouseID		int 		`json:"warehouse_id" binding:"required"`
+	RecipeID 		int 		`json:"recipe_id" binding:"required"`
+	Quantity 		float32		`json:"quantity" binding:"required"`
 }
 
 func (r *UpsertProduction) toVO() production.UpsertProductionDocumentVO {
-	var items []production.UpsertProductionDocumentItemVO
-
-	for _, item := range r.Items {
-		items = append(items, production.UpsertProductionDocumentItemVO{
-			FinishedMaterialID: item.FinishedMaterialID,
-			Quantity: item.Quantity,
-			RecipeID: item.RecipeID,
-		})
-	}
-
 	return production.UpsertProductionDocumentVO{
 		WarehouseID: r.WarehouseID,
-		Items: items,
+		RecipeID: r.RecipeID,
+		Quantity: r.Quantity,
 	}
 }
 
@@ -79,11 +65,17 @@ func (ch *ProductionHandler) Create(c *gin.Context) {
 	if err != nil {
 		httpCode := http.StatusInternalServerError
 
-		if errors.Is(err, production.ErrInsufficientRawMaterialAmount) {
+		if errors.Is(err, entity.ErrRecipeNotFound) ||
+		   errors.Is(err, entity.ErrWarehouseNotFound) {
+			httpCode = http.StatusBadRequest
+		}
+
+		if errors.Is(err, entity.ErrInsufficientStock) {
 			httpCode = http.StatusUnprocessableEntity
 		}
 		
-		c.Status(httpCode)
+		// c.Status(httpCode)
+		c.JSON(httpCode, gin.H{"error": err.Error()})
 		return
 	}
 

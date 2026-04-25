@@ -36,6 +36,10 @@ import (
 	iHandler "vkr/internal/handlers/incoming"
 	iService "vkr/internal/service/document/incoming"
 	iRepo "vkr/internal/repository/postgres/document/incoming"
+
+	prHandler "vkr/internal/handlers/production"
+	prService "vkr/internal/service/document/production"
+	prRepo "vkr/internal/repository/postgres/document/production"
 )
 
 type App struct {
@@ -52,6 +56,7 @@ type App struct {
 	StockService *sService.StockService
 	MovementService *mService.MovementService
 	IncomingService *iService.IncomingDocumentService
+	ProductionService *prService.ProductionDocumentService
 
 	ProductHandler *pHandler.ProductHandler
 	CounterPartyHandler *cpHandler.CounterpartyHandler
@@ -60,6 +65,7 @@ type App struct {
 	StockHandler *sHandler.StockHandler
 	MovementHandler *mHandler.MovementHandler
 	IncomingHandler *iHandler.IncomingHandler
+	ProductionHandler *prHandler.ProductionHandler
 
 	ProductRepository *pRepo.ProductRepository
 	CounterPartyRepository *cpRepo.CounterpartyRepository
@@ -68,6 +74,7 @@ type App struct {
 	StockRepository *sRepo.StockRepository
 	MovementRepository *mRepo.MovementRepository
 	IncomingRepository *iRepo.IncomingRepository
+	ProductionRepository *prRepo.ProductionRepository
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -120,6 +127,15 @@ func (app *App) initService() {
 		app.CounterPartyRepository, 
 		app.StockService, 
 	)
+
+	app.ProductionService = prService.New(
+		app.TxMan, 
+		app.RepoFactory,
+		app.ProductRepository,
+		app.WarehouseRepository, 
+		app.RecipeRepository, 
+		app.StockService, 
+	)
 }
 
 func (app *App) initHandlers() {
@@ -130,6 +146,7 @@ func (app *App) initHandlers() {
 	app.StockHandler = sHandler.New(app.StockService, app.ProductRepository, app.WarehouseRepository)
 	app.MovementHandler = mHandler.New(app.MovementService, app.ProductRepository, app.WarehouseRepository)
 	app.IncomingHandler = iHandler.New(app.IncomingService, app.ProductRepository)
+	app.ProductionHandler = prHandler.New(app.ProductionService)
 }
 
 func (app *App) initRepos() {
@@ -140,6 +157,7 @@ func (app *App) initRepos() {
 	app.StockRepository = sRepo.New(app.DB)
 	app.MovementRepository = mRepo.New(app.DB)
 	app.IncomingRepository = iRepo.New(app.DB)
+	app.ProductionRepository = prRepo.New(app.DB)
 }
 
 func (app *App) Close() {

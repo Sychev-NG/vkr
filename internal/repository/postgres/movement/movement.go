@@ -158,6 +158,34 @@ func (pr *MovementRepository) RegisterIncoming(ctx context.Context, docVO docume
 
 	return &result, nil
 }
+
 func (pr *MovementRepository) RegisterOutgoing(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) (*entity.Movement, error) {
-	return nil, nil
+	var result entity.Movement
+
+	outgoingQuantity := -quantity
+
+	err := pr.db.QueryRow(
+		ctx, 
+		"INSERT INTO movements (product_id, warehouse_id, document_id, document_type, quantity, date) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, product_id, warehouse_id, document_id, document_type, quantity, date", 
+		product_id, 
+		warehouse_id, 
+		docVO.DocumentID,
+		docVO.Type,
+		outgoingQuantity,
+		time.Now().UTC(),
+	).Scan(
+		&result.ID, 
+		&result.ProductID, 
+		&result.WarehouseID, 
+		&result.DocumentID, 
+		&result.DocumentType, 
+		&result.Quantity,
+		&result.Date,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }

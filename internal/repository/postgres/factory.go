@@ -11,6 +11,7 @@ import (
 	sRepo "vkr/internal/repository/postgres/stock"
 	mRepo "vkr/internal/repository/postgres/movement"
 	iRepo "vkr/internal/repository/postgres/document/incoming"
+	prRepo "vkr/internal/repository/postgres/document/production"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -70,4 +71,11 @@ func (f *RepositoryFactory) NewIncomingRepository(ctx context.Context) *iRepo.In
 		return iRepo.New(tx)
 	}
 	return iRepo.New(f.pool)
+}
+
+func (f *RepositoryFactory) NewProductionRepository(ctx context.Context) *prRepo.ProductionRepository {
+	if tx, ok := storage.GetTx(ctx); ok && tx != nil {
+		return prRepo.New(tx)
+	}
+	return prRepo.New(f.pool)
 }
