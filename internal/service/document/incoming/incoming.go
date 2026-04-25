@@ -7,6 +7,7 @@ import (
 	"vkr/internal/entity"
 	"vkr/internal/entity/document"
 	"vkr/internal/entity/document/incoming"
+	repo "vkr/internal/repository/postgres/document/incoming"
 )
 
 type TxManager interface {
@@ -37,10 +38,13 @@ type StockService interface {
 	Add(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) error
 }
 
+type RepoFactory interface {
+	NewIncomingRepository(ctx context.Context) *repo.IncomingRepository
+}
+
 type IncomingDocumentService struct {
 	txManager 				TxManager
-	saver 					IncomingDocumentSaver
-	provider				IncomingDocumentProvider
+	f						RepoFactory
 	productProvider			ProductProvider
 	warehouseProvider		WarehouseProvider
 	counterpartyProvider	CounterpartyProvider
@@ -49,18 +53,17 @@ type IncomingDocumentService struct {
 
 func New(
 	txManager TxManager, 
-	rs IncomingDocumentSaver, 
-	rp IncomingDocumentProvider, 
+	f RepoFactory,
 	pp ProductProvider, 
 	wp WarehouseProvider, 
 	cp CounterpartyProvider,
 	ss StockService,
 ) *IncomingDocumentService {
-	return &IncomingDocumentService{txManager, rs, rp, pp, wp, cp, ss}
+	return &IncomingDocumentService{txManager, f, pp, wp, cp, ss}
 }
 
-func (ps *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertIncomingDocumentVO) error {
-	_, err := ps.counterpartyProvider.GetById(ctx, vo.CounterPartyID)
+func (s *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertIncomingDocumentVO) error {
+	_, err := s.counterpartyProvider.GetById(ctx, vo.CounterPartyID)
 	if err != nil {
 		if errors.Is(err, entity.ErrCounterpartyNotFound) {
 			return incoming.ErrSupplierNotFound
@@ -68,13 +71,13 @@ func (ps *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertIn
 		return err
 	}
 
-	_, err = ps.warehouseProvider.GetById(ctx, vo.CounterPartyID)
+	_, err = s.warehouseProvider.GetById(ctx, vo.CounterPartyID)
 	if err != nil {
 		return err
 	}
 
 	for _, rawMaterial := range vo.Items {
-		_, err = ps.productProvider.GetById(ctx, rawMaterial.RawMaterialID)
+		_, err = s.productProvider.GetById(ctx, rawMaterial.RawMaterialID)
 		if err != nil {
 			if errors.Is(err, entity.ErrProductNotFound) {
 				return entity.ErrRawProductNotFound
@@ -83,14 +86,15 @@ func (ps *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertIn
 		}
 	}
 
-	err = ps.txManager.RunInTx(ctx, func(txCtx context.Context) error {
-		document, err := ps.saver.Add(txCtx, vo)
+	err = s.txManager.RunInTx(ctx, func(txCtx context.Context) error {
+		iRepo := s.f.NewIncomingRepository(txCtx)
+		document, err := iRepo.Add(txCtx, vo)
 		if err != nil {
 			return err
 		}
 
 		for _, rawMaterial := range vo.Items {
-			err := ps.stockService.Add(txCtx, document.ToDocument(), rawMaterial.RawMaterialID, vo.WarehouseID, rawMaterial.Quantity)
+			err := s.stockService.Add(txCtx, document.ToDocument(), rawMaterial.RawMaterialID, vo.WarehouseID, rawMaterial.Quantity)
 			if err != nil {
 				return err				
 			}
@@ -106,6 +110,7 @@ func (ps *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertIn
 	return nil
 }
 
-func (ps *IncomingDocumentService) GetAll(ctx context.Context) ([]incoming.IncomingDocument, error) {
-	return ps.provider.GetAll(ctx)
+func (s *IncomingDocumentService) GetAll(ctx context.Context) ([]incoming.IncomingDocument, error) {
+	repo := s.f.NewIncomingRepository(ctx)
+	return repo.GetAll(ctx)
 }

@@ -10,21 +10,27 @@ import (
 	"vkr/internal/entity"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type StockRepository struct {
-	pool *pgxpool.Pool
+type QueryExecutor interface {
+    QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+    Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
+    Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 }
 
-func New(db *pgxpool.Pool) *StockRepository {
-	return &StockRepository{pool: db}
+type StockRepository struct {
+	db QueryExecutor
+}
+
+func New(db QueryExecutor) *StockRepository {
+	return &StockRepository{db: db}
 }
 
 func (pr *StockRepository) GetById(ctx context.Context, id int) (*entity.Stock, error) {
 	var item entity.Stock
 
-    err := pr.pool.QueryRow(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE id = $1", id).Scan(
+    err := pr.db.QueryRow(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE id = $1", id).Scan(
 		&item.ID, 
 		&item.ProductID, 
 		&item.WarehouseID, 
@@ -47,7 +53,7 @@ func (pr *StockRepository) GetById(ctx context.Context, id int) (*entity.Stock, 
 func (pr *StockRepository) GetByProductId(ctx context.Context, id int) ([]entity.Stock, error) {
 	var items []entity.Stock
 
-	rows, err := pr.pool.Query(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=$1", id)
+	rows, err := pr.db.Query(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=$1", id)
 	if err != nil {
 		log.Printf("StockRepository::GetByProductId Error - %v", err)
 		return items, err
@@ -71,7 +77,7 @@ func (pr *StockRepository) GetByProductId(ctx context.Context, id int) ([]entity
 func (pr *StockRepository) GetByProductAndWarehouseId(ctx context.Context, product_id, warehouse_id int) (*entity.Stock, error) {
 	var result entity.Stock
 
-	err := pr.pool.QueryRow(ctx, 
+	err := pr.db.QueryRow(ctx, 
 		"SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=$1 AND warehouse_id=$2", 
 		product_id, warehouse_id,
 	).Scan(
@@ -94,7 +100,7 @@ func (pr *StockRepository) GetByProductAndWarehouseId(ctx context.Context, produ
 func (pr *StockRepository) GetAll(ctx context.Context) ([]entity.Stock, error) {
 	var items []entity.Stock
 
-	rows, err := pr.pool.Query(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks")
+	rows, err := pr.db.Query(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks")
 	if err != nil {
 		log.Printf("StockRepository::GetAll Error - %v", err)
 		return items, err
@@ -133,7 +139,7 @@ func (pr *StockRepository) GetByFilter(ctx context.Context, filter entity.StockF
 		args = append(args, filter.WarehouseID)
 	}
 	
-	rows, err := pr.pool.Query(ctx, query.String(), args...)
+	rows, err := pr.db.Query(ctx, query.String(), args...)
 	if err != nil {
 		log.Printf("StockRepository::GetAll Error - %v", err)
 		return items, err
@@ -184,7 +190,7 @@ func (pr *StockRepository) Decrease(ctx context.Context, product_id, warehouse_i
 func (pr *StockRepository) Add(ctx context.Context, product_id, warehouse_id int, quantity float32) (*entity.Stock, error) {
     var item entity.Stock
     
-    err := pr.pool.QueryRow(
+    err := pr.db.QueryRow(
         ctx, 
         "INSERT INTO stocks (product_id, warehouse_id, quantity) VALUES ($1, $2, $3) RETURNING id, product_id, warehouse_id, quantity", 
         product_id, 
@@ -207,7 +213,7 @@ func (pr *StockRepository) Add(ctx context.Context, product_id, warehouse_id int
 func (pr *StockRepository) updateQuantity(ctx context.Context, id int, quantity float32) (*entity.Stock, error) {
 	var item entity.Stock
 
-	err := pr.pool.QueryRow(
+	err := pr.db.QueryRow(
 		ctx, 
 		"UPDATE stocks SET quantity=$1 WHERE id=$2 RETURNING id, product_id, warehouse_id, quantity", 
 		quantity,
@@ -232,7 +238,7 @@ func (pr *StockRepository) updateQuantity(ctx context.Context, id int, quantity 
 }
 
 func (pr *StockRepository) Delete(ctx context.Context, id int) error {
-	_, err :=pr.pool.Exec(ctx, "DELETE FROM stocks WHERE id=$1", id)
+	_, err :=pr.db.Exec(ctx, "DELETE FROM stocks WHERE id=$1", id)
 	if err != nil {
 		log.Printf("StockRepository::Delete Error - %v", err)
 	}

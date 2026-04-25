@@ -6,6 +6,8 @@ import (
 
 	"vkr/internal/entity"
 	"vkr/internal/entity/document"
+	mRepo "vkr/internal/repository/postgres/movement"
+	sRepo "vkr/internal/repository/postgres/stock"
 )
 
 type TxManager interface {
@@ -28,23 +30,29 @@ type ProductProvider interface {
 	GetById(ctx context.Context, id int) (*entity.Product, error)
 }
 
+type RepoFactory interface {
+	NewStockRepository(ctx context.Context) *sRepo.StockRepository
+	NewMovementRepository(ctx context.Context) *mRepo.MovementRepository
+}
+
 type StockService struct {
 	txManager		TxManager
-	stockRepo		StockRepository
-	movingkRepo		MovingRepository
+	f 				RepoFactory
 	productProvider	ProductProvider
 }
 
-func New(tx TxManager, sr StockRepository, mr MovingRepository, pp ProductProvider) *StockService {
-	return &StockService{tx, sr, mr, pp}
+func New(tx TxManager, f RepoFactory, pp ProductProvider) *StockService {
+	return &StockService{tx, f, pp}
 }
 
 func (ps *StockService) GetAll(ctx context.Context) ([]entity.Stock, error) {
-	return ps.stockRepo.GetAll(ctx)
+	sRepo := ps.f.NewStockRepository(ctx)
+	return sRepo.GetAll(ctx)
 }
 
 func (ps *StockService) GetByFilter(ctx context.Context, filter entity.StockFilter) ([]entity.Stock, error) {
-	return ps.stockRepo.GetByFilter(ctx, filter)
+	sRepo := ps.f.NewStockRepository(ctx)
+	return sRepo.GetByFilter(ctx, filter)
 }
 
 func (ss *StockService) Add(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) error {
@@ -53,13 +61,16 @@ func (ss *StockService) Add(ctx context.Context, docVO document.Document, produc
 	}
 
 	err := ss.txManager.RunInTx(ctx, func(txCtx context.Context) error {
-		err := ss.stockRepo.Increase(txCtx, product_id, warehouse_id, quantity)
+		sRepo := ss.f.NewStockRepository(txCtx)
+		mRepo := ss.f.NewMovementRepository(txCtx)
+
+		err := sRepo.Increase(txCtx, product_id, warehouse_id, quantity)
 		if err != nil {
 			log.Printf("StockService::Add Increase Error - %v", err.Error())
 			return err
 		}
 
-		movement, err := ss.movingkRepo.RegisterIncoming(txCtx, docVO, product_id, warehouse_id, quantity)
+		movement, err := mRepo.RegisterIncoming(txCtx, docVO, product_id, warehouse_id, quantity)
 		if err != nil {
 			log.Printf("StockService::Add RegisterIncoming Error - %v", err.Error())
 			return err
@@ -82,7 +93,8 @@ func (ss *StockService) Remove(ctx context.Context, docVO document.Document, pro
 		return entity.ErrInvalidQuantity
 	}
 
-	stocks, err := ss.stockRepo.GetByFilter(ctx, entity.StockFilter{ProductID: product_id, WarehouseID: warehouse_id})
+	sRepo := ss.f.NewStockRepository(ctx)
+	stocks, err := sRepo.GetByFilter(ctx, entity.StockFilter{ProductID: product_id, WarehouseID: warehouse_id})
 	if err != nil {
 		return err
 	}
@@ -98,12 +110,15 @@ func (ss *StockService) Remove(ctx context.Context, docVO document.Document, pro
 	}
 
 	err = ss.txManager.RunInTx(ctx, func(txCtx context.Context) error {
-		err := ss.stockRepo.Decrease(txCtx, product_id, warehouse_id, quantity)
+		sRepo := ss.f.NewStockRepository(txCtx)
+		mRepo := ss.f.NewMovementRepository(txCtx)
+
+		err := sRepo.Decrease(txCtx, product_id, warehouse_id, quantity)
 		if err != nil {
 			return err
 		}
 
-		ss.movingkRepo.RegisterOutgoing(txCtx, docVO, product_id, warehouse_id, quantity)
+		mRepo.RegisterOutgoing(txCtx, docVO, product_id, warehouse_id, quantity)
 
 		return nil
 	})

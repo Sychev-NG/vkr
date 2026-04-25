@@ -4,7 +4,8 @@ import (
 	"context"
 	"log"
 	"vkr/internal/config"
-	"vkr/internal/storage/postgres"
+	storage "vkr/internal/storage/postgres"
+	repos "vkr/internal/repository/postgres"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -41,7 +42,8 @@ type App struct {
 	Config *config.Config
 
 	DB 		*pgxpool.Pool
-	TxMan 	*postgres.TransactionManager
+	TxMan 	*storage.TransactionManager
+	RepoFactory 	*repos.RepositoryFactory
 
 	ProductService *pService.ProductService
 	CounterPartyService *cpService.CounterpartyService
@@ -84,7 +86,7 @@ func New(cfg *config.Config) (*App, error) {
 
 func (app *App) initDB() error {
     ctx := context.Background()
-    db, err := postgres.NewPool(ctx, *app.Config)
+    db, err := storage.NewPool(ctx, *app.Config)
     if err != nil {
         return err
     }
@@ -93,7 +95,7 @@ func (app *App) initDB() error {
 	log.Printf("Pinging DB %v", err)
 
     app.DB = db
-    app.TxMan = postgres.NewTransactionManager(db)
+    app.TxMan = storage.NewTransactionManager(db)
     return nil
 }
 
@@ -102,12 +104,15 @@ func (app *App) initService() {
 	app.CounterPartyService = cpService.New(app.CounterPartyRepository, app.CounterPartyRepository)
 	app.WarehouseService = wService.New(app.WarehouseRepository, app.WarehouseRepository)
 	app.RecipeService = rService.New(app.TxMan, app.RecipeRepository, app.RecipeRepository, app.ProductRepository)
-	app.StockService = sService.New(app.TxMan, app.StockRepository, app.MovementRepository, app.ProductRepository)
+	app.StockService = sService.New(
+		app.TxMan, 
+		app.RepoFactory,
+		app.ProductRepository,
+	)
 	app.MovementService = mService.New(app.MovementRepository, app.MovementRepository, app.ProductRepository)
 	app.IncomingService = iService.New(
 		app.TxMan, 
-		app.IncomingRepository, 
-		app.IncomingRepository, 
+		app.RepoFactory,
 		app.ProductRepository,
 		app.WarehouseRepository, 
 		app.CounterPartyRepository, 

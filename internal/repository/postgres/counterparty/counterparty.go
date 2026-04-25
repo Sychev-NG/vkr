@@ -8,21 +8,26 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type CounterpartyRepository struct {
-	pool *pgxpool.Pool
+type QueryExecutor interface {
+    QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+    Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
+    Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 }
 
-func New(db *pgxpool.Pool) *CounterpartyRepository {
-	return &CounterpartyRepository{pool: db}
+type CounterpartyRepository struct {
+	db QueryExecutor
+}
+
+func New(db QueryExecutor) *CounterpartyRepository {
+	return &CounterpartyRepository{db: db}
 }
 
 func (pr *CounterpartyRepository) Add(ctx context.Context, name, role string) (*entity.Counterparty, error) {
 	var item entity.Counterparty
 
-	err := pr.pool.QueryRow(
+	err := pr.db.QueryRow(
 		ctx, 
 		"INSERT INTO counterparties (name, role) VALUES ($1, $2) RETURNING id, name, role", 
 		name, 
@@ -48,7 +53,7 @@ func (pr *CounterpartyRepository) Add(ctx context.Context, name, role string) (*
 func (pr *CounterpartyRepository) Update(ctx context.Context, id int, name, role string) (*entity.Counterparty, error) {
 	var item entity.Counterparty
 
-	err := pr.pool.QueryRow(
+	err := pr.db.QueryRow(
 		ctx, 
 		"UPDATE counterparties SET name=$1, role=$2 WHERE id=$3 RETURNING id, name, role", 
 		name, 
@@ -77,7 +82,7 @@ func (pr *CounterpartyRepository) Update(ctx context.Context, id int, name, role
 }
 
 func (pr *CounterpartyRepository) Delete(ctx context.Context, id int) error {
-	_, err :=pr.pool.Exec(ctx, "DELETE FROM counterparties WHERE id=$1", id)
+	_, err :=pr.db.Exec(ctx, "DELETE FROM counterparties WHERE id=$1", id)
 	if err != nil {
 		log.Printf("CounterpartyRepository::Delete Error - %v", err)
 	}
@@ -87,7 +92,7 @@ func (pr *CounterpartyRepository) Delete(ctx context.Context, id int) error {
 func (pr *CounterpartyRepository) GetById(ctx context.Context, id int) (*entity.Counterparty, error) {
     var item entity.Counterparty
 
-    err := pr.pool.QueryRow(ctx, "SELECT id, name, role FROM counterparties WHERE id = $1", id).Scan(
+    err := pr.db.QueryRow(ctx, "SELECT id, name, role FROM counterparties WHERE id = $1", id).Scan(
 		&item.ID, 
 		&item.Name, 
 		&item.Role,
@@ -109,7 +114,7 @@ func (pr *CounterpartyRepository) GetById(ctx context.Context, id int) (*entity.
 func (pr *CounterpartyRepository) GetAll(ctx context.Context) ([]entity.Counterparty, error) {
 	var items []entity.Counterparty
 
-	rows, err := pr.pool.Query(ctx, "SELECT id, name, role FROM counterparties")
+	rows, err := pr.db.Query(ctx, "SELECT id, name, role FROM counterparties")
 	if err != nil {
 		log.Printf("CounterpartyRepository::GetAll Error - %v", err)
 		return items, err
