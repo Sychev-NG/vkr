@@ -77,6 +77,8 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	app.RepoFactory = repos.New(app.DB)
+	
 	app.initRepos()
 	app.initService()
 	app.initHandlers()

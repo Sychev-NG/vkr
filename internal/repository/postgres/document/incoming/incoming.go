@@ -72,7 +72,7 @@ func (r *IncomingRepository) createDocument(ctx context.Context, warehouse_id, c
 
 func (r *IncomingRepository) createDocumentItem(ctx context.Context, documentId int, raw_material_id int, quantity, price float32) (int, error) {
     var itemId int
-
+ 
     err := r.db.QueryRow(ctx, `
         INSERT INTO incoming_doc_items (document_id, product_id, quantity, price) 
         VALUES ($1, $2, $3, $4) 

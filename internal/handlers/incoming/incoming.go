@@ -2,6 +2,7 @@ package incoming
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"vkr/internal/entity"
 	"vkr/internal/entity/document/incoming"
@@ -77,10 +78,16 @@ func (ch *IncomingHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+ 
 	err := ch.service.Add(c, request.toVO())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, incoming.ErrSupplierNotFound) ||
+		   errors.Is(err, entity.ErrInvalidRawMaterial) ||
+		   errors.Is(err, entity.ErrRawProductNotFound) {
+			c.Status(http.StatusBadRequest)
+		}
+
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 

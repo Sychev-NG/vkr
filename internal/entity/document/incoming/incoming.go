@@ -10,6 +10,7 @@ import (
 var (
 	ErrIncomingDocumentNotFound 	= errors.New("incoming document not found")
 	ErrSupplierNotFound 			= errors.New("supplier not found")
+	ErrInvalidSupplier 				= errors.New("invalid supplier")
 )
 
 type IncomingDocument struct {

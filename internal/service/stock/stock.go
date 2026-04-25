@@ -70,13 +70,11 @@ func (ss *StockService) Add(ctx context.Context, docVO document.Document, produc
 			return err
 		}
 
-		movement, err := mRepo.RegisterIncoming(txCtx, docVO, product_id, warehouse_id, quantity)
+		_, err = mRepo.RegisterIncoming(txCtx, docVO, product_id, warehouse_id, quantity)
 		if err != nil {
 			log.Printf("StockService::Add RegisterIncoming Error - %v", err.Error())
 			return err
 		}
-
-		log.Printf("StockService::Add RegisterIncoming result - %v", movement)
 
 		return nil
 	})

@@ -3,6 +3,7 @@ package incoming
 import (
 	"context"
 	"errors"
+	"log"
 
 	"vkr/internal/entity"
 	"vkr/internal/entity/document"
@@ -63,12 +64,16 @@ func New(
 }
 
 func (s *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertIncomingDocumentVO) error {
-	_, err := s.counterpartyProvider.GetById(ctx, vo.CounterPartyID)
+	buyer, err := s.counterpartyProvider.GetById(ctx, vo.CounterPartyID)
 	if err != nil {
 		if errors.Is(err, entity.ErrCounterpartyNotFound) {
 			return incoming.ErrSupplierNotFound
 		}
 		return err
+	}
+
+	if buyer.Role != string(entity.Supplier) {
+		return incoming.ErrInvalidSupplier
 	}
 
 	_, err = s.warehouseProvider.GetById(ctx, vo.CounterPartyID)
@@ -77,11 +82,17 @@ func (s *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertInc
 	}
 
 	for _, rawMaterial := range vo.Items {
-		_, err = s.productProvider.GetById(ctx, rawMaterial.RawMaterialID)
+		raw, err := s.productProvider.GetById(ctx, rawMaterial.RawMaterialID)
 		if err != nil {
 			if errors.Is(err, entity.ErrProductNotFound) {
 				return entity.ErrRawProductNotFound
 			}
+
+			if entity.ProductType(raw.TypeName) != entity.Raw {
+				return entity.ErrInvalidRawMaterial
+			}
+
+			log.Printf("IncomingDocumentService::Add productProvider.GetById Error - %v", err)
 			return err
 		}
 	}
@@ -90,12 +101,14 @@ func (s *IncomingDocumentService) Add(ctx context.Context, vo incoming.UpsertInc
 		iRepo := s.f.NewIncomingRepository(txCtx)
 		document, err := iRepo.Add(txCtx, vo)
 		if err != nil {
+			log.Printf("IncomingDocumentService::Add iRepo.Add Error - %v", err)
 			return err
 		}
 
 		for _, rawMaterial := range vo.Items {
 			err := s.stockService.Add(txCtx, document.ToDocument(), rawMaterial.RawMaterialID, vo.WarehouseID, rawMaterial.Quantity)
 			if err != nil {
+				log.Printf("IncomingDocumentService::Add stockService.Add Error - %v", err)
 				return err				
 			}
 		}
