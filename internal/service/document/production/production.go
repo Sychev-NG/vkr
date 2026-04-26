@@ -83,6 +83,8 @@ func (s *ProductionDocumentService) Add(ctx context.Context, vo production.Upser
 			return err
 		}
 
+		log.Printf("ProductionDocumentService::Add txCtx - %v", txCtx)
+
 		for _, ingredient := range recpe.Ingredients {
 			err := s.stockService.Remove(txCtx, document.ToDocument(), ingredient.RawMaterialID, vo.WarehouseID, vo.Quantity * ingredient.QuantityPerUnit)
 			if err != nil {
@@ -91,9 +93,11 @@ func (s *ProductionDocumentService) Add(ctx context.Context, vo production.Upser
 			}		
 		}
 		
+		log.Printf("ProductionDocumentService::Add txCtx - %v", txCtx)
+
 		err = s.stockService.Add(txCtx, document.ToDocument(), recpe.ProductID, vo.WarehouseID, vo.Quantity)
 		if err != nil {
-			log.Printf("ProductionDocumentService::Add stockService.Remove Error - %v", err)
+			log.Printf("ProductionDocumentService::Add stockService.Add Error - %v", err)
 			return err
 		}
 

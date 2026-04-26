@@ -57,7 +57,11 @@ func (ps *StockService) GetByFilter(ctx context.Context, filter entity.StockFilt
 
 func (ps *StockService) GetByProductAndWarehouseId(ctx context.Context, product_id, warhouse_id int) (*entity.Stock, error) {
 	sRepo := ps.f.NewStockRepository(ctx)
-	return sRepo.GetByProductAndWarehouseId(ctx, product_id, warhouse_id)
+	result, err := sRepo.GetByProductAndWarehouseId(ctx, product_id, warhouse_id)
+	if err != nil {
+		log.Printf("StockService::GetByProductAndWarehouseId Error - %v", err.Error())
+	}
+	return result, err
 }
 
 func (ss *StockService) Add(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) error {
@@ -108,7 +112,7 @@ func (ss *StockService) Remove(ctx context.Context, docVO document.Document, pro
 
 	stock := stocks[0]
 
-	if stock.Quantity <= quantity {
+	if stock.Quantity < quantity {
 		return entity.ErrInsufficientStock
 	}
 

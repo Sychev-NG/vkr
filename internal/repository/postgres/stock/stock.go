@@ -77,6 +77,8 @@ func (pr *StockRepository) GetByProductId(ctx context.Context, id int) ([]entity
 func (pr *StockRepository) GetByProductAndWarehouseId(ctx context.Context, product_id, warehouse_id int) (*entity.Stock, error) {
 	var result entity.Stock
 
+	log.Printf("StockRepository::GetByProductAndWarehouseId Querry - SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=%d AND warehouse_id=%d", product_id, warehouse_id)	
+
 	err := pr.db.QueryRow(ctx, 
 		"SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=$1 AND warehouse_id=$2", 
 		product_id, warehouse_id,
@@ -163,6 +165,7 @@ func (pr *StockRepository) GetByFilter(ctx context.Context, filter entity.StockF
 func (pr *StockRepository) Increase(ctx context.Context, product_id, warehouse_id int, quantity float32) error {    
 	stock, err := pr.GetByProductAndWarehouseId(ctx, product_id, warehouse_id)   
     if err != nil && !errors.Is(err, entity.ErrStockNotFound) {
+		log.Printf("StockRepository::Increase GetByProductAndWarehouseId Error - %v", err)
         return err
     }
 
@@ -186,7 +189,7 @@ func (pr *StockRepository) Increase(ctx context.Context, product_id, warehouse_i
 func (pr *StockRepository) Decrease(ctx context.Context, product_id, warehouse_id int, quantity float32) error {
 	stock, err := pr.GetByProductAndWarehouseId(ctx, product_id, warehouse_id)   
     if err != nil {
-		log.Printf("ProductRepository::Decrease GetByProductAndWarehouseId Error - %v", err)
+		log.Printf("StockRepository::Decrease GetByProductAndWarehouseId Error - %v", err)
         return err
     }
 
@@ -194,7 +197,7 @@ func (pr *StockRepository) Decrease(ctx context.Context, product_id, warehouse_i
 		// Update
 		_, err = pr.updateQuantity(ctx, stock.ID, stock.Quantity - quantity)
 		if err != nil {
-			log.Printf("ProductRepository::Decrease updateQuantity Error - %v", err)
+			log.Printf("StockRepository::Decrease updateQuantity Error - %v", err)
         	return err
     	}
 	}

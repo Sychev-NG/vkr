@@ -88,5 +88,9 @@ func (h *StockHandler) List(c *gin.Context) {
 		})
 	}
 
-	c.IndentedJSON(http.StatusOK, dtoCollection)
+	if len(dtoCollection) == 0 {
+		c.Status(http.StatusNoContent)
+	} else {
+		c.IndentedJSON(http.StatusOK, dtoCollection)
+	}
 }

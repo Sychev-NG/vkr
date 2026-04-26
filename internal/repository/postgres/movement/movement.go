@@ -153,6 +153,7 @@ func (pr *MovementRepository) RegisterIncoming(ctx context.Context, docVO docume
 	)
 
 	if err != nil {
+		log.Printf("MovementRepository::RegisterIncoming QueryRow Error - %v", err)
 		return nil, err
 	}
 
@@ -184,6 +185,7 @@ func (pr *MovementRepository) RegisterOutgoing(ctx context.Context, docVO docume
 	)
 
 	if err != nil {
+		log.Printf("MovementRepository::RegisterOutgoing QueryRow Error - %v", err)
 		return nil, err
 	}
 
