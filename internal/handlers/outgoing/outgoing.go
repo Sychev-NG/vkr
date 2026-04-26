@@ -81,6 +81,8 @@ func (ch *OutgoingHandler) Create(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, outgoing.ErrBuyerNotFound) ||
 			errors.Is(err, entity.ErrInvalidFinishedMaterial) ||
+			errors.Is(err, entity.ErrCounterpartyNotFound) ||
+			errors.Is(err, entity.ErrWarehouseNotFound) ||
 		   errors.Is(err, entity.ErrFinishedProductNotFound) {
 			c.Status(http.StatusBadRequest)
 		}

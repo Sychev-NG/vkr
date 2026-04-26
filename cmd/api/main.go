@@ -136,10 +136,10 @@ func setupRouter() *gin.Engine {
 			productionGroup.POST("", Application.ProductionHandler.Create)
 		}
 
-		// outgoingGroup := api.Group("/outgoing")
-		// {
-		// 	outgoingGroup.POST("", outgoingHandler.Ceate)
-		// }
+		outgoingGroup := api.Group("/outgoing")
+		{
+			outgoingGroup.POST("", Application.OutgoingHandler.Create)
+		}
 	}
 
 	return router

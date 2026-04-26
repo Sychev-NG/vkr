@@ -40,6 +40,10 @@ import (
 	prHandler "vkr/internal/handlers/production"
 	prService "vkr/internal/service/document/production"
 	prRepo "vkr/internal/repository/postgres/document/production"
+
+	oHandler "vkr/internal/handlers/outgoing"
+	oService "vkr/internal/service/document/outgoing"
+	oRepo "vkr/internal/repository/postgres/document/outgoing"
 )
 
 type App struct {
@@ -57,6 +61,7 @@ type App struct {
 	MovementService *mService.MovementService
 	IncomingService *iService.IncomingDocumentService
 	ProductionService *prService.ProductionDocumentService
+	OutgoingService *oService.OutgoingDocumentService
 
 	ProductHandler *pHandler.ProductHandler
 	CounterPartyHandler *cpHandler.CounterpartyHandler
@@ -66,6 +71,7 @@ type App struct {
 	MovementHandler *mHandler.MovementHandler
 	IncomingHandler *iHandler.IncomingHandler
 	ProductionHandler *prHandler.ProductionHandler
+	OutgoingHandler *oHandler.OutgoingHandler
 
 	ProductRepository *pRepo.ProductRepository
 	CounterPartyRepository *cpRepo.CounterpartyRepository
@@ -75,6 +81,7 @@ type App struct {
 	MovementRepository *mRepo.MovementRepository
 	IncomingRepository *iRepo.IncomingRepository
 	ProductionRepository *prRepo.ProductionRepository
+	OutgoingRepository *oRepo.OutgoingRepository
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -136,6 +143,15 @@ func (app *App) initService() {
 		app.RecipeRepository, 
 		app.StockService, 
 	)
+
+	app.OutgoingService = oService.New(
+		app.TxMan, 
+		app.RepoFactory,
+		app.ProductRepository,
+		app.WarehouseRepository, 
+		app.CounterPartyRepository, 
+		app.StockService, 
+	)
 }
 
 func (app *App) initHandlers() {
@@ -147,6 +163,7 @@ func (app *App) initHandlers() {
 	app.MovementHandler = mHandler.New(app.MovementService, app.ProductRepository, app.WarehouseRepository)
 	app.IncomingHandler = iHandler.New(app.IncomingService, app.ProductRepository)
 	app.ProductionHandler = prHandler.New(app.ProductionService)
+	app.OutgoingHandler = oHandler.New(app.OutgoingService, app.ProductRepository)
 }
 
 func (app *App) initRepos() {
@@ -158,6 +175,7 @@ func (app *App) initRepos() {
 	app.MovementRepository = mRepo.New(app.DB)
 	app.IncomingRepository = iRepo.New(app.DB)
 	app.ProductionRepository = prRepo.New(app.DB)
+	app.OutgoingRepository = oRepo.New(app.DB)
 }
 
 func (app *App) Close() {
