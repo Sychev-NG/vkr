@@ -6,7 +6,7 @@ CREATE TABLE movements (
     warehouse_id INTEGER NOT NULL,
     document_id INTEGER NOT NULL,
     document_type VARCHAR(10) NOT NULL,
-    quantity DECIMAL(12, 4) NOT NULL CHECK (quantity > 0),
+    quantity DECIMAL(12, 4) NOT NULL,
     date TIMESTAMP NOT NULL DEFAULT NOW()
 );
 -- +goose StatementEnd
