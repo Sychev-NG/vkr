@@ -2,92 +2,60 @@ package outgoing
 
 import (
 	"context"
-	"errors"
 	"net/http"
-	"vkr/internal/entity"
 	"vkr/internal/entity/document/outgoing"
 
 	"github.com/gin-gonic/gin"
 )
 
-type UpsertOutgoing struct {
-	CounterpartyID	int 					`json:"counterparty_id" binding:"required"`
-	WarehouseID		int 					`json:"warehouse_id" binding:"required"`
-	Items 			[]UpsertOutgoingItem 	`json:"items" binding:"required"`
+type OutgoingItemDTO struct {
+	ProductID int     `json:"product_id" binding:"required"`
+	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
+	Price     float64 `json:"price" binding:"required,gte=0"`
 }
 
-type UpsertOutgoingItem struct {
-	FinishedMaterialID 	int			`json:"product_id" binding:"required"`
-	Quantity 			float32		`json:"quantity" binding:"required"`
-	Price 				float32 	`json:"price" binding:"required"`
-}
-
-func (r *UpsertOutgoing) toVO() outgoing.UpsertOutgoingDocumentVO {
-	var items []outgoing.UpsertOutgoingDocumentItemVO
-
-	for _, item := range r.Items {
-		items = append(items, outgoing.UpsertOutgoingDocumentItemVO{
-			FinishedMaterialID: item.FinishedMaterialID,
-			Quantity: item.Quantity,
-			Price: item.Price,
-		})
-	}
-
-	return outgoing.UpsertOutgoingDocumentVO{
-		CounterPartyID: r.CounterpartyID,
-		WarehouseID: r.WarehouseID,
-		Items: items,
-	}
-}
-
-type Outgoing struct {
-	DocumentID	int 			`json:"document_id"`
-	Items 		[]OutgoingItem 	`json:"movements"`
-}
-
-type OutgoingItem struct {
-	ProductID 	int 	`json:"product_id"`
-	ProductName	int 	`json:"product_name"`
-	Quantity 	float32	`json:"quantity"`
+type UpsertOutgoingDTO struct {
+	WarehouseID    int               `json:"warehouse_id" binding:"required"`
+	CounterpartyID int               `json:"counterparty_id" binding:"required"`
+	Items          []OutgoingItemDTO `json:"items" binding:"required,min=1"`
 }
 
 type OutgoingServiceInterface interface {
-	Add(ctx context.Context, vo outgoing.UpsertOutgoingDocumentVO) error
-	GetAll(ctx context.Context) ([]outgoing.OutgoingDocument, error)
-}
-
-type ProductProviderInterface interface {
-	GetById(ctx context.Context, id int) (*entity.Product, error)
+	Add(ctx context.Context, req outgoing.UpsertOutgoingDocumentVO) error
 }
 
 type OutgoingHandler struct {
 	service OutgoingServiceInterface
-	productProvider ProductProviderInterface
 }
 
-func New(s OutgoingServiceInterface, pp ProductProviderInterface) *OutgoingHandler {
-	return &OutgoingHandler{s, pp}
+func New(isi OutgoingServiceInterface) *OutgoingHandler {
+	return &OutgoingHandler{service: isi}
 }
 
-func (ch *OutgoingHandler) Create(c *gin.Context) {
-	var request UpsertOutgoing
-
-	if err  := c.BindJSON(&request); err != nil {
+func (h *OutgoingHandler) Create(c *gin.Context) {
+	var req UpsertOutgoingDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
- 
-	err := ch.service.Add(c, request.toVO())
-	if err != nil {
-		if errors.Is(err, outgoing.ErrBuyerNotFound) ||
-			errors.Is(err, entity.ErrInvalidFinishedMaterial) ||
-			errors.Is(err, entity.ErrCounterpartyNotFound) ||
-			errors.Is(err, entity.ErrWarehouseNotFound) ||
-		   errors.Is(err, entity.ErrFinishedProductNotFound) {
-			c.Status(http.StatusBadRequest)
-		}
 
-		c.Status(http.StatusInternalServerError)
+	items := make([]outgoing.UpsertOutgoingDocumentItemVO, len(req.Items))
+	for i, item := range req.Items {
+		items[i] = outgoing.UpsertOutgoingDocumentItemVO{
+			ProductID: item.ProductID,
+			Quantity:  item.Quantity,
+			Price:     item.Price,
+		}
+	}
+
+	err := h.service.Add(c, outgoing.UpsertOutgoingDocumentVO{
+		WarehouseID:    req.WarehouseID,
+		CounterPartyID: req.CounterpartyID,
+		Items:          items,
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 

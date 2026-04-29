@@ -7,13 +7,13 @@ import (
 )
 
 type WarehouseSaver interface {
-	Add(ctx context.Context, name, address string) (*entity.Warehouse, error)
+	Create(ctx context.Context, name, address string) (*entity.Warehouse, error)
 	Update(ctx context.Context, id int, name, address string) (*entity.Warehouse, error)
 	Delete(ctx context.Context, id int) (error)
 }
 
 type WarehouseProvider interface{
-	GetById(ctx context.Context, id int) (*entity.Warehouse, error)
+	GetByID(ctx context.Context, id int) (*entity.Warehouse, error)
 	GetAll(ctx context.Context) ([]entity.Warehouse, error)
 }
 
@@ -37,11 +37,11 @@ func (ps *WarehouseService) Add(ctx context.Context, name, address string) (*ent
 		return nil, entity.ErrInvalidWarehouseAddress
 	}
 
-	return ps.saver.Add(ctx, name, address)	
+	return ps.saver.Create(ctx, name, address)	
 }
 
-func (ps *WarehouseService) GetById(ctx context.Context, id int) (*entity.Warehouse, error) {
-	return ps.provider.GetById(ctx, id)
+func (ps *WarehouseService) GetByID(ctx context.Context, id int) (*entity.Warehouse, error) {
+	return ps.provider.GetByID(ctx, id)
 }
 
 func (ps *WarehouseService) GetAll(ctx context.Context) ([]entity.Warehouse, error) {

@@ -3,51 +3,32 @@ package stock
 import (
 	"context"
 	"log"
+	"math"
 
 	"vkr/internal/entity"
 	"vkr/internal/entity/document"
-	mRepo "vkr/internal/repository/postgres/movement"
-	sRepo "vkr/internal/repository/postgres/stock"
+	"vkr/internal/repository/postgres"
+	// bRepo "vkr/internal/repository/postgres/batch"
+	// bmRepo "vkr/internal/repository/postgres/batch_movement"
+	// sRepo "vkr/internal/repository/postgres/stock"
 )
 
 type TxManager interface {
 	RunInTx(ctx context.Context, fn func(txCtx context.Context) error) error
 }
 
-type StockRepository interface {
-    GetAll(ctx context.Context) ([]entity.Stock, error)
-    GetByFilter(ctx context.Context, filter entity.StockFilter) ([]entity.Stock, error)
-    Increase(ctx context.Context, productID, warehouseID int, quantity float32) error
-    Decrease(ctx context.Context, productID, warehouseID int, quantity float32) error
-}
-
-type MovingRepository interface {
-	RegisterIncoming(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) (*entity.Movement, error)
-	RegisterOutgoing(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) (*entity.Movement, error)
-}
-
 type ProductProvider interface {
 	GetById(ctx context.Context, id int) (*entity.Product, error)
 }
 
-type RepoFactory interface {
-	NewStockRepository(ctx context.Context) *sRepo.StockRepository
-	NewMovementRepository(ctx context.Context) *mRepo.MovementRepository
-}
 
 type StockService struct {
 	txManager		TxManager
-	f 				RepoFactory
-	productProvider	ProductProvider
+	f 				*postgres.RepositoryFactory
 }
 
-func New(tx TxManager, f RepoFactory, pp ProductProvider) *StockService {
-	return &StockService{tx, f, pp}
-}
-
-func (ps *StockService) GetAll(ctx context.Context) ([]entity.Stock, error) {
-	sRepo := ps.f.NewStockRepository(ctx)
-	return sRepo.GetAll(ctx)
+func New(tx TxManager, f *postgres.RepositoryFactory) *StockService {
+	return &StockService{tx, f}
 }
 
 func (ps *StockService) GetByFilter(ctx context.Context, filter entity.StockFilter) ([]entity.Stock, error) {
@@ -55,33 +36,38 @@ func (ps *StockService) GetByFilter(ctx context.Context, filter entity.StockFilt
 	return sRepo.GetByFilter(ctx, filter)
 }
 
-func (ps *StockService) GetByProductAndWarehouseId(ctx context.Context, product_id, warhouse_id int) (*entity.Stock, error) {
-	sRepo := ps.f.NewStockRepository(ctx)
-	result, err := sRepo.GetByProductAndWarehouseId(ctx, product_id, warhouse_id)
-	if err != nil {
-		log.Printf("StockService::GetByProductAndWarehouseId Error - %v", err.Error())
-	}
-	return result, err
-}
-
-func (ss *StockService) Add(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) error {
+func (ss *StockService) Add(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity, unit_cost float64) error {
 	if quantity <= 0 {
 		return entity.ErrInvalidQuantity
 	}
 
 	err := ss.txManager.RunInTx(ctx, func(txCtx context.Context) error {
 		sRepo := ss.f.NewStockRepository(txCtx)
-		mRepo := ss.f.NewMovementRepository(txCtx)
+		bRepo := ss.f.NewBatchRepository(txCtx)
+		bmRepo := ss.f.NewBatchMovementRepository(txCtx)
 
-		err := sRepo.Increase(txCtx, product_id, warehouse_id, quantity)
+		batch, err := bRepo.Create(txCtx, entity.UpsertBatchVO{
+			ProductID: product_id,
+			WarehouseID: warehouse_id,
+			DocumentType: string(docVO.Type),
+			DocumentID: docVO.DocumentID,
+			QuantityRemaining: quantity,
+			UnitCost: unit_cost,
+		})
 		if err != nil {
-			log.Printf("StockService::Add Increase Error - %v", err.Error())
+			log.Printf("StockService::Add Create Error - %v", err.Error())
 			return err
 		}
 
-		_, err = mRepo.RegisterIncoming(txCtx, docVO, product_id, warehouse_id, quantity)
+		_, err = bmRepo.RegisterIncoming(txCtx, docVO, batch.ID, quantity)
 		if err != nil {
 			log.Printf("StockService::Add RegisterIncoming Error - %v", err.Error())
+			return err
+		}
+
+		err = sRepo.Increase(txCtx, product_id, warehouse_id, quantity)
+		if err != nil {
+			log.Printf("StockService::Add Increase Error - %v", err.Error())
 			return err
 		}
 
@@ -95,7 +81,7 @@ func (ss *StockService) Add(ctx context.Context, docVO document.Document, produc
 	return nil
 }
 
-func (ss *StockService) Remove(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float32) error {
+func (ss *StockService) Remove(ctx context.Context, docVO document.Document, product_id, warehouse_id int, quantity float64) error {
 	if quantity <= 0 {
 		return entity.ErrInvalidQuantity
 	}
@@ -118,14 +104,43 @@ func (ss *StockService) Remove(ctx context.Context, docVO document.Document, pro
 
 	err = ss.txManager.RunInTx(ctx, func(txCtx context.Context) error {
 		sRepo := ss.f.NewStockRepository(txCtx)
-		mRepo := ss.f.NewMovementRepository(txCtx)
+		bRepo := ss.f.NewBatchRepository(txCtx)
+		bmRepo := ss.f.NewBatchMovementRepository(txCtx)
 
-		err := sRepo.Decrease(txCtx, product_id, warehouse_id, quantity)
+		batchCollection, err := bRepo.GetBatchesForQuantity(ctx, product_id,  warehouse_id, quantity)
 		if err != nil {
+			log.Printf("StockService::Remove GetBatchesForQuantity Error - %v", err.Error())
 			return err
 		}
 
-		mRepo.RegisterOutgoing(txCtx, docVO, product_id, warehouse_id, quantity)
+		remaining := quantity
+		for _, batch := range batchCollection {
+			toSubtract := math.Min(remaining, batch.QuantityRemaining)
+
+			err := bRepo.Subtract(txCtx, batch.ID, toSubtract)
+			if err != nil {
+				log.Printf("StockService::Remove Subtract Error - %v", err.Error())
+				return err
+			}
+
+			_, err = bmRepo.RegisterOutgoing(txCtx, docVO, batch.ID, toSubtract)
+			if err != nil {
+				log.Printf("StockService::Remove RegisterOutgoing Error - %v", err.Error())
+				return err
+			}
+
+			remaining -= toSubtract
+
+			if remaining <= 0 {
+				break
+			}			
+		}
+
+		err = sRepo.Decrease(txCtx, product_id, warehouse_id, quantity)
+		if err != nil {
+			log.Printf("StockService::Remove Decrease Error - %v", err.Error())
+			return err
+		}
 
 		return nil
 	})
@@ -135,4 +150,16 @@ func (ss *StockService) Remove(ctx context.Context, docVO document.Document, pro
 	}
 
 	return nil
+}
+
+func (ss *StockService) GetAvailableQuantity(ctx context.Context, product_id, warehouse_id int) (float64, error) {
+	sRepo := ss.f.NewStockRepository(ctx)
+
+	stock, err := sRepo.GetByProductAndWarehouse(ctx, product_id, warehouse_id)
+	if err != nil {
+		log.Printf("StockService::GetAvailableQuantity Error - %v", err)
+		return 0, err
+	}
+	
+	return stock.Quantity, nil
 }

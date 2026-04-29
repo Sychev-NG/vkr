@@ -8,89 +8,82 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type FilterParams struct {
-	WarehouseID int `form:"warehouse_id"`
-	ProductID   int `form:"product_id"`
-}
-
-func (fp *FilterParams) toFilter() entity.StockFilter {
-	return entity.StockFilter{ProductID: fp.ProductID, WarehouseID: fp.WarehouseID}
-}
-
-type Stock struct {
-	ProductID		int 				`json:"product_id"`
-	ProductName		string 				`json:"product_name"`
-	WarehouseID 	int 				`json:"warehouse_id"`
-	WarehouseName	string 				`json:"warehouse_name"`
-	Unit			string 				`json:"unit"`
-	Quantity		float32				`json:"quantity"`
+type StockDTO struct {
+	ProductID     int     `json:"product_id"`
+	ProductName   string  `json:"product_name"`
+	ProductUnit   string  `json:"product_unit"`
+	WarehouseID   int     `json:"warehouse_id"`
+	WarehouseName string  `json:"warehouse_name"`
+	Quantity      float64 `json:"quantity"`
 }
 
 type StockServiceInterface interface {
-	GetAll(ctx context.Context) ([]entity.Stock, error)
 	GetByFilter(ctx context.Context, filter entity.StockFilter) ([]entity.Stock, error)
 }
 
-type ProductProviderInterface interface {
-	GetById(ctx context.Context, id int) (*entity.Product, error)
+type ProductRepository interface {
+	GetByID(ctx context.Context, id int) (*entity.Product, error)
 }
 
-type WarehouseProviderInterface interface {
-	GetById(ctx context.Context, id int) (*entity.Warehouse, error)
+type WarehouseRepository interface {
+	GetByID(ctx context.Context, id int) (*entity.Warehouse, error)
 }
 
 type StockHandler struct {
-	service StockServiceInterface
-	productProvider ProductProviderInterface
-	warehouseProvider WarehouseProviderInterface
+	service      StockServiceInterface
+	productRepo  ProductRepository
+	warehouseRepo WarehouseRepository
 }
 
-func New(rsi StockServiceInterface, ppi ProductProviderInterface, wpi WarehouseProviderInterface) *StockHandler {
-	return &StockHandler{rsi, ppi, wpi}
+func New(ssi StockServiceInterface, pr ProductRepository, wr WarehouseRepository) *StockHandler {
+	return &StockHandler{
+		service:      ssi,
+		productRepo:  pr,
+		warehouseRepo: wr,
+	}
 }
 
 func (h *StockHandler) List(c *gin.Context) {
-	var uriSearchParams FilterParams
-	if err := c.ShouldBindQuery(&uriSearchParams); err != nil {
-		c.Status(http.StatusBadRequest)
-		return
-	}
+    var uriParams struct {
+        WarehouseID int `uri:"warehouse_id"`
+        ProductID int `uri:"product_id"`
+    } 
+    
+    if err := c.ShouldBindUri(&uriParams); err != nil {
+        c.Status(http.StatusBadRequest)
+        return
+    }
 
-	items, err := h.service.GetByFilter(c, uriSearchParams.toFilter())
+	collection, err := h.service.GetByFilter(c, entity.StockFilter{WarehouseID: uriParams.WarehouseID, ProductID: uriParams.ProductID})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error" : err.Error()})
 		return
 	}
 
-	var dtoCollection []Stock
+	dtoCollection := make([]StockDTO, len(collection))
+	for index, item := range collection {
 
-	for _, item := range items {
-
-		product, err := h.productProvider.GetById(c, item.ProductID)
+		warhouse, err := h.warehouseRepo.GetByID(c, item.WarehouseID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error" : err.Error()})
 			return
-		}	
+		}
 
-		warehouse, err := h.warehouseProvider.GetById(c, item.WarehouseID)
+		product, err := h.productRepo.GetByID(c, item.ProductID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error" : err.Error()})
 			return
-		}	
+		}
 
-		dtoCollection = append(dtoCollection, Stock{
+		dtoCollection[index] = StockDTO{
 			ProductID: item.ProductID,
 			ProductName: product.Name,
+			ProductUnit: product.Unit,
 			WarehouseID: item.WarehouseID,
-			WarehouseName: warehouse.Name,
-			Unit: product.Unit,
+			WarehouseName: warhouse.Name,
 			Quantity: item.Quantity,
-		})
+		}
 	}
 
-	if len(dtoCollection) == 0 {
-		c.Status(http.StatusNoContent)
-	} else {
-		c.IndentedJSON(http.StatusOK, dtoCollection)
-	}
+	c.IndentedJSON(http.StatusOK, dtoCollection)
 }

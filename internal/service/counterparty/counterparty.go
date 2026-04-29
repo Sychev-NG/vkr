@@ -7,13 +7,13 @@ import (
 )
 
 type CounterpartySaver interface {
-	Add(ctx context.Context, name, role string) (*entity.Counterparty, error)
+	Create(ctx context.Context, name, role string) (*entity.Counterparty, error)
 	Update(ctx context.Context, id int, name, role string) (*entity.Counterparty, error)
 	Delete(ctx context.Context, id int) (error)
 }
 
 type CounterpartyProvider interface{
-	GetById(ctx context.Context, id int) (*entity.Counterparty, error)
+	GetByID(ctx context.Context, id int) (*entity.Counterparty, error)
 	GetAll(ctx context.Context) ([]entity.Counterparty, error)
 }
 
@@ -37,11 +37,11 @@ func (ps *CounterpartyService) Add(ctx context.Context, name, role string) (*ent
 		return nil, entity.ErrInvalidCounterpartyRole
 	}
 
-	return ps.saver.Add(ctx, name, role)	
+	return ps.saver.Create(ctx, name, role)	
 }
 
-func (ps *CounterpartyService) GetById(ctx context.Context, id int) (*entity.Counterparty, error) {
-	return ps.provider.GetById(ctx, id)
+func (ps *CounterpartyService) GetByID(ctx context.Context, id int) (*entity.Counterparty, error) {
+	return ps.provider.GetByID(ctx, id)
 }
 
 func (ps *CounterpartyService) GetAll(ctx context.Context) ([]entity.Counterparty, error) {

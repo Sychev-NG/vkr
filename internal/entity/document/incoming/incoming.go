@@ -8,17 +8,16 @@ import (
 )
 
 var (
-	ErrIncomingDocumentNotFound 	= errors.New("incoming document not found")
-	ErrSupplierNotFound 			= errors.New("supplier not found")
-	ErrInvalidSupplier 				= errors.New("invalid supplier")
+	ErrIncomingDocumentNotFound = errors.New("incoming document not found")
+	ErrSupplierNotFound         = errors.New("supplier not found")
 )
 
 type IncomingDocument struct {
-	ID       		int
-	WarehouseID		int
-	CounterPartyID	int
-	Date			time.Time
-	Items 			[]IncomingDocumentItem
+	ID             int
+	WarehouseID    int
+	CounterPartyID int
+	Date           time.Time
+	Items          []IncomingDocumentItem
 }
 
 func (doc *IncomingDocument) ToDocument() document.Document {
@@ -26,20 +25,20 @@ func (doc *IncomingDocument) ToDocument() document.Document {
 }
 
 type IncomingDocumentItem struct {
-	ID						int
-	RawMaterialID			int
-	Quantity				float32
-	Price					float32
+	ID        int
+	ProductID int
+	Quantity  float64
+	Price     float64
 }
 
 type UpsertIncomingDocumentVO struct {
-	WarehouseID		int
-	CounterPartyID	int
-	Items 			[]UpsertIncomingDocumentItemVO
+	WarehouseID    int
+	CounterPartyID int
+	Items          []UpsertIncomingDocumentItemVO
 }
 
 type UpsertIncomingDocumentItemVO struct {
-	RawMaterialID			int
-	Quantity				float32
-	Price					float32
+	ProductID int
+	Quantity  float64
+	Price     float64
 }

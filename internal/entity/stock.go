@@ -5,19 +5,19 @@ import (
 )
 
 var (
-	ErrStockNotFound 		= errors.New("stock not found")
-	ErrInvalidQuantity 		= errors.New("invalid quantity")
-	ErrInsufficientStock   	= errors.New("insufficient stock")
+	ErrStockNotFound     = errors.New("stock not found")
+	ErrInvalidQuantity   = errors.New("invalid quantity")
+	ErrInsufficientStock = errors.New("insufficient stock")
 )
 
 type Stock struct {
-	ID       	int
-	ProductID	int
-	WarehouseID	int
-	Quantity	float32
+	ID          int
+	ProductID   int
+	WarehouseID int
+	Quantity    float64
 }
 
 type StockFilter struct {
-	ProductID	int
-	WarehouseID	int
+	ProductID   int
+	WarehouseID int
 }

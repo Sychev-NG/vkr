@@ -11,9 +11,9 @@ import (
 )
 
 type QueryExecutor interface {
-    QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-    Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
-    Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 }
 
 type CounterpartyRepository struct {
@@ -24,14 +24,14 @@ func New(db QueryExecutor) *CounterpartyRepository {
 	return &CounterpartyRepository{db: db}
 }
 
-func (pr *CounterpartyRepository) Add(ctx context.Context, name, role string) (*entity.Counterparty, error) {
+func (r *CounterpartyRepository) Create(ctx context.Context, name, role string) (*entity.Counterparty, error) {
 	var item entity.Counterparty
 
-	err := pr.db.QueryRow(
-		ctx, 
-		"INSERT INTO counterparties (name, role) VALUES ($1, $2) RETURNING id, name, role", 
-		name, 
-		role, 
+	err := r.db.QueryRow(
+		ctx,
+		"INSERT INTO counterparties (name, role) VALUES ($1, $2) RETURNING id, name, role",
+		name,
+		role,
 	).Scan(
 		&item.ID,
 		&item.Name,
@@ -39,24 +39,23 @@ func (pr *CounterpartyRepository) Add(ctx context.Context, name, role string) (*
 	)
 
 	if err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { // Psql 23505 - duplicate error code
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
 			return nil, entity.ErrCounterpartyDuplicateFound
 		}
-
-		log.Printf("CounterpartyRepository::Add Error - %v", err)
+		log.Printf("CounterpartyRepository::Create Error - %v", err)
 		return nil, err
 	}
 
 	return &item, nil
 }
 
-func (pr *CounterpartyRepository) Update(ctx context.Context, id int, name, role string) (*entity.Counterparty, error) {
+func (r *CounterpartyRepository) Update(ctx context.Context, id int, name, role string) (*entity.Counterparty, error) {
 	var item entity.Counterparty
 
-	err := pr.db.QueryRow(
-		ctx, 
-		"UPDATE counterparties SET name=$1, role=$2 WHERE id=$3 RETURNING id, name, role", 
-		name, 
+	err := r.db.QueryRow(
+		ctx,
+		"UPDATE counterparties SET name=$1, role=$2 WHERE id=$3 RETURNING id, name, role",
+		name,
 		role,
 		id,
 	).Scan(
@@ -66,14 +65,12 @@ func (pr *CounterpartyRepository) Update(ctx context.Context, id int, name, role
 	)
 
 	if err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { // Psql 23505 - duplicate error code
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
 			return nil, entity.ErrCounterpartyDuplicateFound
 		}
-
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrCounterpartyNotFound
 		}
-
 		log.Printf("CounterpartyRepository::Update Error - %v", err)
 		return nil, err
 	}
@@ -81,40 +78,38 @@ func (pr *CounterpartyRepository) Update(ctx context.Context, id int, name, role
 	return &item, nil
 }
 
-func (pr *CounterpartyRepository) Delete(ctx context.Context, id int) error {
-	_, err :=pr.db.Exec(ctx, "DELETE FROM counterparties WHERE id=$1", id)
+func (r *CounterpartyRepository) Delete(ctx context.Context, id int) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM counterparties WHERE id=$1", id)
 	if err != nil {
 		log.Printf("CounterpartyRepository::Delete Error - %v", err)
 	}
 	return err
 }
 
-func (pr *CounterpartyRepository) GetById(ctx context.Context, id int) (*entity.Counterparty, error) {
-    var item entity.Counterparty
+func (r *CounterpartyRepository) GetByID(ctx context.Context, id int) (*entity.Counterparty, error) {
+	var item entity.Counterparty
 
-    err := pr.db.QueryRow(ctx, "SELECT id, name, role FROM counterparties WHERE id = $1", id).Scan(
-		&item.ID, 
-		&item.Name, 
+	err := r.db.QueryRow(ctx, "SELECT id, name, role FROM counterparties WHERE id = $1", id).Scan(
+		&item.ID,
+		&item.Name,
 		&item.Role,
 	)
-    
-    if err != nil {
+
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrCounterpartyNotFound
 		}
+		log.Printf("CounterpartyRepository::GetByID Error - %v", err)
+		return nil, err
+	}
 
-		log.Printf("CounterpartyRepository::GetById Error - %v", err)
-
-        return nil, err
-    }
-        
-    return &item, nil
+	return &item, nil
 }
 
-func (pr *CounterpartyRepository) GetAll(ctx context.Context) ([]entity.Counterparty, error) {
+func (r *CounterpartyRepository) GetAll(ctx context.Context) ([]entity.Counterparty, error) {
 	var items []entity.Counterparty
 
-	rows, err := pr.db.Query(ctx, "SELECT id, name, role FROM counterparties")
+	rows, err := r.db.Query(ctx, "SELECT id, name, role FROM counterparties ORDER BY id")
 	if err != nil {
 		log.Printf("CounterpartyRepository::GetAll Error - %v", err)
 		return items, err
@@ -123,13 +118,42 @@ func (pr *CounterpartyRepository) GetAll(ctx context.Context) ([]entity.Counterp
 
 	for rows.Next() {
 		var item entity.Counterparty
-		rows.Scan(
-			&item.ID, 
-			&item.Name, 
-			&item.Role, 
-		)
+		if err := rows.Scan(
+			&item.ID,
+			&item.Name,
+			&item.Role,
+		); err != nil {
+			log.Printf("CounterpartyRepository::GetAll Scan Error - %v", err)
+			continue
+		}
 		items = append(items, item)
 	}
 
-	return items, err
+	return items, nil
+}
+
+func (r *CounterpartyRepository) GetByRole(ctx context.Context, role string) ([]entity.Counterparty, error) {
+	var items []entity.Counterparty
+
+	rows, err := r.db.Query(ctx, "SELECT id, name, role FROM counterparties WHERE role = $1 ORDER BY id", role)
+	if err != nil {
+		log.Printf("CounterpartyRepository::GetByRole Error - %v", err)
+		return items, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var item entity.Counterparty
+		if err := rows.Scan(
+			&item.ID,
+			&item.Name,
+			&item.Role,
+		); err != nil {
+			log.Printf("CounterpartyRepository::GetByRole Scan Error - %v", err)
+			continue
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
 }

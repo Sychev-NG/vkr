@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-
 	"vkr/internal/entity"
 
 	"github.com/jackc/pgx/v5"
@@ -14,9 +13,9 @@ import (
 )
 
 type QueryExecutor interface {
-    QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-    Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
-    Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 }
 
 type StockRepository struct {
@@ -27,61 +26,60 @@ func New(db QueryExecutor) *StockRepository {
 	return &StockRepository{db: db}
 }
 
-func (pr *StockRepository) GetById(ctx context.Context, id int) (*entity.Stock, error) {
+func (r *StockRepository) GetByID(ctx context.Context, id int) (*entity.Stock, error) {
 	var item entity.Stock
 
-    err := pr.db.QueryRow(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE id = $1", id).Scan(
-		&item.ID, 
-		&item.ProductID, 
-		&item.WarehouseID, 
-		&item.Quantity, 
+	err := r.db.QueryRow(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE id = $1", id).Scan(
+		&item.ID,
+		&item.ProductID,
+		&item.WarehouseID,
+		&item.Quantity,
 	)
-    
-    if err != nil {
+
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrStockNotFound
 		}
+		log.Printf("StockRepository::GetByID Error - %v", err)
+		return nil, err
+	}
 
-		log.Printf("StockRepository::GetById Error - %v", err)
-
-        return nil, err
-    }
-        
-    return &item, nil
+	return &item, nil
 }
 
-func (pr *StockRepository) GetByProductId(ctx context.Context, id int) ([]entity.Stock, error) {
+func (r *StockRepository) GetByProductID(ctx context.Context, productID int) ([]entity.Stock, error) {
 	var items []entity.Stock
 
-	rows, err := pr.db.Query(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=$1", id)
+	rows, err := r.db.Query(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=$1", productID)
 	if err != nil {
-		log.Printf("StockRepository::GetByProductId Error - %v", err)
+		log.Printf("StockRepository::GetByProductID Error - %v", err)
 		return items, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var item entity.Stock
-		rows.Scan(
-			&item.ID, 
-			&item.ProductID, 
-			&item.WarehouseID, 
-			&item.Quantity, 
-		)
+		if err := rows.Scan(
+			&item.ID,
+			&item.ProductID,
+			&item.WarehouseID,
+			&item.Quantity,
+		); err != nil {
+			log.Printf("StockRepository::GetByProductID Scan Error - %v", err)
+			continue
+		}
 		items = append(items, item)
 	}
 
-	return items, err
+	return items, rows.Err()
 }
 
-func (pr *StockRepository) GetByProductAndWarehouseId(ctx context.Context, product_id, warehouse_id int) (*entity.Stock, error) {
+func (r *StockRepository) GetByProductAndWarehouse(ctx context.Context, productID, warehouseID int) (*entity.Stock, error) {
 	var result entity.Stock
 
-	log.Printf("StockRepository::GetByProductAndWarehouseId Querry - SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=%d AND warehouse_id=%d", product_id, warehouse_id)	
-
-	err := pr.db.QueryRow(ctx, 
-		"SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=$1 AND warehouse_id=$2", 
-		product_id, warehouse_id,
+	err := r.db.QueryRow(ctx,
+		"SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE product_id=$1 AND warehouse_id=$2",
+		productID, warehouseID,
 	).Scan(
 		&result.ID,
 		&result.ProductID,
@@ -92,17 +90,17 @@ func (pr *StockRepository) GetByProductAndWarehouseId(ctx context.Context, produ
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrStockNotFound
 		}
-		log.Printf("StockRepository::GetByProductAndWarehouseId Error - %v", err)
+		log.Printf("StockRepository::GetByProductAndWarehouse Error - %v", err)
 		return nil, err
 	}
 
 	return &result, nil
 }
 
-func (pr *StockRepository) GetAll(ctx context.Context) ([]entity.Stock, error) {
+func (r *StockRepository) GetAll(ctx context.Context) ([]entity.Stock, error) {
 	var items []entity.Stock
 
-	rows, err := pr.db.Query(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks")
+	rows, err := r.db.Query(ctx, "SELECT id, product_id, warehouse_id, quantity FROM stocks ORDER BY product_id, warehouse_id")
 	if err != nil {
 		log.Printf("StockRepository::GetAll Error - %v", err)
 		return items, err
@@ -111,154 +109,238 @@ func (pr *StockRepository) GetAll(ctx context.Context) ([]entity.Stock, error) {
 
 	for rows.Next() {
 		var item entity.Stock
-		rows.Scan(
-			&item.ID, 
-			&item.ProductID, 
-			&item.WarehouseID, 
-			&item.Quantity, 
-		)
+		if err := rows.Scan(
+			&item.ID,
+			&item.ProductID,
+			&item.WarehouseID,
+			&item.Quantity,
+		); err != nil {
+			log.Printf("StockRepository::GetAll Scan Error - %v", err)
+			continue
+		}
 		items = append(items, item)
 	}
 
-	return items, err
+	return items, rows.Err()
 }
 
-func (pr *StockRepository) GetByFilter(ctx context.Context, filter entity.StockFilter) ([]entity.Stock, error) {
+func (r *StockRepository) GetByFilter(ctx context.Context, filter entity.StockFilter) ([]entity.Stock, error) {
 	var items []entity.Stock
 
 	var query strings.Builder
 	query.WriteString("SELECT id, product_id, warehouse_id, quantity FROM stocks WHERE 1=1")
-	
+
 	args := []interface{}{}
-	
+
 	if filter.ProductID > 0 {
 		query.WriteString(fmt.Sprintf(" AND product_id = $%d", len(args)+1))
 		args = append(args, filter.ProductID)
 	}
-	
+
 	if filter.WarehouseID > 0 {
 		query.WriteString(fmt.Sprintf(" AND warehouse_id = $%d", len(args)+1))
 		args = append(args, filter.WarehouseID)
 	}
-	
-	rows, err := pr.db.Query(ctx, query.String(), args...)
+
+	query.WriteString(" ORDER BY product_id, warehouse_id")
+
+	rows, err := r.db.Query(ctx, query.String(), args...)
 	if err != nil {
-		log.Printf("StockRepository::GetAll Error - %v", err)
+		log.Printf("StockRepository::GetByFilter Error - %v", err)
 		return items, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var item entity.Stock
-		rows.Scan(
-			&item.ID, 
-			&item.ProductID, 
-			&item.WarehouseID, 
-			&item.Quantity, 
-		)
+		if err := rows.Scan(
+			&item.ID,
+			&item.ProductID,
+			&item.WarehouseID,
+			&item.Quantity,
+		); err != nil {
+			log.Printf("StockRepository::GetByFilter Scan Error - %v", err)
+			continue
+		}
 		items = append(items, item)
 	}
 
-	return items, err
+	return items, rows.Err()
 }
 
-func (pr *StockRepository) Increase(ctx context.Context, product_id, warehouse_id int, quantity float32) error {    
-	stock, err := pr.GetByProductAndWarehouseId(ctx, product_id, warehouse_id)   
-    if err != nil && !errors.Is(err, entity.ErrStockNotFound) {
-		log.Printf("StockRepository::Increase GetByProductAndWarehouseId Error - %v", err)
-        return err
-    }
-
-	if stock != nil {
-		// Update
-		_, err = pr.updateQuantity(ctx, stock.ID, stock.Quantity + quantity)
-		if err != nil {
-        	return err
-    	}
-	} else {
-		// Add
-		_, err = pr.Add(ctx, product_id, warehouse_id, quantity)
-		if err != nil {
-        	return err
-    	}
+func (r *StockRepository) Increase(ctx context.Context, productID, warehouseID int, quantity float64) error {
+	stock, err := r.GetByProductAndWarehouse(ctx, productID, warehouseID)
+	if err != nil && !errors.Is(err, entity.ErrStockNotFound) {
+		log.Printf("StockRepository::Increase GetByProductAndWarehouse Error - %v", err)
+		return err
 	}
-    
-    return nil
-}
-
-func (pr *StockRepository) Decrease(ctx context.Context, product_id, warehouse_id int, quantity float32) error {
-	stock, err := pr.GetByProductAndWarehouseId(ctx, product_id, warehouse_id)   
-    if err != nil {
-		log.Printf("StockRepository::Decrease GetByProductAndWarehouseId Error - %v", err)
-        return err
-    }
 
 	if stock != nil {
-		// Update
-		_, err = pr.updateQuantity(ctx, stock.ID, stock.Quantity - quantity)
+		// Update existing
+		_, err = r.updateQuantity(ctx, stock.ID, stock.Quantity+quantity)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Create new
+		_, err = r.Create(ctx, productID, warehouseID, quantity)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Decrease уменьшает остаток на указанное количество
+func (r *StockRepository) Decrease(ctx context.Context, productID, warehouseID int, quantity float64) error {
+	stock, err := r.GetByProductAndWarehouse(ctx, productID, warehouseID)
+	if err != nil {
+		log.Printf("StockRepository::Decrease GetByProductAndWarehouse Error - %v", err)
+		return err
+	}
+
+	if stock != nil {
+		newQuantity := stock.Quantity - quantity
+		if newQuantity < 0 {
+			return entity.ErrInsufficientStock
+		}
+		_, err = r.updateQuantity(ctx, stock.ID, newQuantity)
 		if err != nil {
 			log.Printf("StockRepository::Decrease updateQuantity Error - %v", err)
-        	return err
-    	}
+			return err
+		}
+	} else {
+		return entity.ErrStockNotFound
 	}
-    
-    return nil
+
+	return nil
 }
 
-func (pr *StockRepository) Add(ctx context.Context, product_id, warehouse_id int, quantity float32) (*entity.Stock, error) {
-    var item entity.Stock
-    
-    err := pr.db.QueryRow(
-        ctx, 
-        "INSERT INTO stocks (product_id, warehouse_id, quantity) VALUES ($1, $2, $3) RETURNING id, product_id, warehouse_id, quantity", 
-        product_id, 
-        warehouse_id, 
-        quantity,
-    ).Scan(
-        &item.ID, 
-        &item.ProductID, 
-        &item.WarehouseID, 
-        &item.Quantity, 
-    )
-    
-    if err != nil {
-        return nil, err
-    }
-    
-    return &item, nil
-}
-
-func (pr *StockRepository) updateQuantity(ctx context.Context, id int, quantity float32) (*entity.Stock, error) {
+// Create создаёт новую запись остатка
+func (r *StockRepository) Create(ctx context.Context, productID, warehouseID int, quantity float64) (*entity.Stock, error) {
 	var item entity.Stock
 
-	err := pr.db.QueryRow(
-		ctx, 
-		"UPDATE stocks SET quantity=$1 WHERE id=$2 RETURNING id, product_id, warehouse_id, quantity", 
+	err := r.db.QueryRow(
+		ctx,
+		"INSERT INTO stocks (product_id, warehouse_id, quantity) VALUES ($1, $2, $3) RETURNING id, product_id, warehouse_id, quantity",
+		productID,
+		warehouseID,
 		quantity,
-		id,
 	).Scan(
-		&item.ID, 
-		&item.ProductID, 
-		&item.WarehouseID, 
-		&item.Quantity, 
+		&item.ID,
+		&item.ProductID,
+		&item.WarehouseID,
+		&item.Quantity,
 	)
 
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, entity.ErrStockNotFound
-		}
-
-		log.Printf("ProductRepository::Update Error - %v", err)
+		log.Printf("StockRepository::Create Error - %v", err)
 		return nil, err
 	}
 
 	return &item, nil
 }
 
-func (pr *StockRepository) Delete(ctx context.Context, id int) error {
-	_, err :=pr.db.Exec(ctx, "DELETE FROM stocks WHERE id=$1", id)
+// // CreateOrUpdate создаёт или обновляет остаток (upsert)
+// func (r *StockRepository) CreateOrUpdate(ctx context.Context, productID, warehouseID int, quantity float64) error {
+// 	_, err := r.db.Exec(ctx, `
+// 		INSERT INTO stocks (product_id, warehouse_id, quantity) 
+// 		VALUES ($1, $2, $3)
+// 		ON CONFLICT (product_id, warehouse_id) 
+// 		DO UPDATE SET quantity = stocks.quantity + $3
+// 	`, productID, warehouseID, quantity)
+
+// 	if err != nil {
+// 		log.Printf("StockRepository::CreateOrUpdate Error - %v", err)
+// 		return err
+// 	}
+// 	return nil
+// }
+
+// // SetQuantity устанавливает точное значение остатка
+// func (r *StockRepository) SetQuantity(ctx context.Context, productID, warehouseID int, quantity float64) error {
+// 	_, err := r.db.Exec(ctx, `
+// 		INSERT INTO stocks (product_id, warehouse_id, quantity) 
+// 		VALUES ($1, $2, $3)
+// 		ON CONFLICT (product_id, warehouse_id) 
+// 		DO UPDATE SET quantity = $3
+// 	`, productID, warehouseID, quantity)
+
+// 	if err != nil {
+// 		log.Printf("StockRepository::SetQuantity Error - %v", err)
+// 		return err
+// 	}
+// 	return nil
+// }
+
+// updateQuantity обновляет количество по ID
+func (r *StockRepository) updateQuantity(ctx context.Context, id int, quantity float64) (*entity.Stock, error) {
+	var item entity.Stock
+
+	err := r.db.QueryRow(
+		ctx,
+		"UPDATE stocks SET quantity=$1 WHERE id=$2 RETURNING id, product_id, warehouse_id, quantity",
+		quantity,
+		id,
+	).Scan(
+		&item.ID,
+		&item.ProductID,
+		&item.WarehouseID,
+		&item.Quantity,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, entity.ErrStockNotFound
+		}
+		log.Printf("StockRepository::updateQuantity Error - %v", err)
+		return nil, err
+	}
+
+	return &item, nil
+}
+
+// Delete удаляет запись остатка
+func (r *StockRepository) Delete(ctx context.Context, id int) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM stocks WHERE id=$1", id)
 	if err != nil {
 		log.Printf("StockRepository::Delete Error - %v", err)
 	}
 	return err
 }
+
+// // GetLowStock возвращает остатки ниже порогового значения
+// func (r *StockRepository) GetLowStock(ctx context.Context) ([]entity.Stock, error) {
+// 	var items []entity.Stock
+
+// 	rows, err := r.db.Query(ctx, `
+// 		SELECT s.id, s.product_id, s.warehouse_id, s.quantity, p.min_stock
+// 		FROM stocks s
+// 		JOIN products p ON s.product_id = p.id
+// 		WHERE s.quantity <= p.min_stock AND p.min_stock > 0
+// 	`)
+// 	if err != nil {
+// 		log.Printf("StockRepository::GetLowStock Error - %v", err)
+// 		return items, err
+// 	}
+// 	defer rows.Close()
+
+// 	for rows.Next() {
+// 		var item entity.Stock
+// 		var minStock float64
+// 		if err := rows.Scan(
+// 			&item.ID,
+// 			&item.ProductID,
+// 			&item.WarehouseID,
+// 			&item.Quantity,
+// 			&minStock,
+// 		); err != nil {
+// 			log.Printf("StockRepository::GetLowStock Scan Error - %v", err)
+// 			continue
+// 		}
+// 		items = append(items, item)
+// 	}
+
+// 	return items, rows.Err()
+// }

@@ -1,23 +1,24 @@
-package warehouses
+package warehouse
 
 import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"vkr/internal/entity"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Warehouse struct {
-	ID   int		 `json:"id"`
-	Name string      `json:"name" binding:"required"`
-	Address string   `json:"address" binding:"required"`
+type WarehouseDTO struct {
+	ID      int    `json:"id"`
+	Name    string `json:"name" binding:"required"`
+	Address string `json:"address" binding:"required"`
 }
 
 type WarehouseServiceInterface interface {
 	Add(ctx context.Context, name, address string) (*entity.Warehouse, error)
-	GetById(ctx context.Context, id int) (*entity.Warehouse, error)
+	GetByID(ctx context.Context, id int) (*entity.Warehouse, error)
 	GetAll(ctx context.Context) ([]entity.Warehouse, error)
 	Update(ctx context.Context, id int, name, address string) (*entity.Warehouse, error)
 	Delete(ctx context.Context, id int) error
@@ -27,169 +28,128 @@ type WarehouseHandler struct {
 	service WarehouseServiceInterface
 }
 
-func New(csi WarehouseServiceInterface) *WarehouseHandler {
-	return &WarehouseHandler{csi}
+func New(wsi WarehouseServiceInterface) *WarehouseHandler {
+	return &WarehouseHandler{wsi}
 }
 
-func (ch *WarehouseHandler) Get(c *gin.Context) {
-    var uriParams struct {
-        ID int `uri:"id"`
-    } 
-    
-    if err := c.ShouldBindUri(&uriParams); err != nil {
-        c.Status(http.StatusBadRequest)
-        return
-    }
+func (h *WarehouseHandler) Get(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
 
-	item, err := ch.service.GetById(c, uriParams.ID)
-
+	item, err := h.service.GetByID(c, id)
 	if err != nil {
 		if errors.Is(err, entity.ErrWarehouseNotFound) {
 			c.Status(http.StatusNotFound)
-			return			
+			return
 		}
-
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-	
-	dto := Warehouse{
-		ID: item.ID,
-		Name: item.Name,
-		Address: item.Address,
-	}
 
-	c.IndentedJSON(http.StatusOK, dto)
+	c.JSON(http.StatusOK, WarehouseDTO{
+		ID:      item.ID,
+		Name:    item.Name,
+		Address: item.Address,
+	})
 }
 
-func (ch *WarehouseHandler) List(c *gin.Context) {
-	items, err := ch.service.GetAll(c)
-	
+func (h *WarehouseHandler) List(c *gin.Context) {
+	items, err := h.service.GetAll(c)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	dtoCollection := make([]Warehouse,0,len(items))
-
+	dtos := make([]WarehouseDTO, 0, len(items))
 	for _, item := range items {
-		dtoCollection = append(dtoCollection, Warehouse{
-			ID: item.ID,
-			Name: item.Name,
+		dtos = append(dtos, WarehouseDTO{
+			ID:      item.ID,
+			Name:    item.Name,
 			Address: item.Address,
 		})
 	}
-
-	c.IndentedJSON(http.StatusOK, dtoCollection)
+	c.JSON(http.StatusOK, dtos)
 }
 
-func (ch *WarehouseHandler) Update(c *gin.Context) {
-    var uriParams struct {
-        ID int `uri:"id"`
-    } 
-    
-    if err := c.ShouldBindUri(&uriParams); err != nil {
-        c.Status(http.StatusBadRequest)
-        return
-    }
-
-	var warehouse Warehouse
-
-	if err  := c.BindJSON(&warehouse); err != nil {
+func (h *WarehouseHandler) Create(c *gin.Context) {
+	var dto WarehouseDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	item, err := ch.service.Update(
-		c, 
-		uriParams.ID,
-		warehouse.Name,
-		warehouse.Address,
-	)
-
+	item, err := h.service.Add(c, dto.Name, dto.Address)
 	if err != nil {
-		if errors.Is(err, entity.ErrWarehouseDuplicateFound) {
-			c.Status(http.StatusConflict)
+		if errors.Is(err, entity.ErrInvalidWarehouseName) {
+			c.Status(http.StatusBadRequest)
 			return
 		}
+		c.Status(http.StatusInternalServerError)
+		return
+	}
 
+	c.JSON(http.StatusCreated, WarehouseDTO{
+		ID:      item.ID,
+		Name:    item.Name,
+		Address: item.Address,
+	})
+}
+
+func (h *WarehouseHandler) Update(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	var dto WarehouseDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	item, err := h.service.Update(c, id, dto.Name, dto.Address)
+	if err != nil {
 		if errors.Is(err, entity.ErrWarehouseNotFound) {
 			c.Status(http.StatusNotFound)
 			return
 		}
-
-		if errors.Is(err, entity.ErrInvalidWarehouseAddress) ||
-		   errors.Is(err, entity.ErrInvalidWarehouseName) {
+		if errors.Is(err, entity.ErrInvalidWarehouseName) {
 			c.Status(http.StatusBadRequest)
-			return	
+			return
 		}
-
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	dto := Warehouse{
-		ID: item.ID,
-		Name: item.Name,
+	c.JSON(http.StatusOK, WarehouseDTO{
+		ID:      item.ID,
+		Name:    item.Name,
 		Address: item.Address,
-	}
-
-	c.IndentedJSON(http.StatusOK, dto)
+	})
 }
 
-func (ch *WarehouseHandler) Delete(c *gin.Context) {
-    var uriParams struct {
-        ID int `uri:"id"`
-    } 
-    
-    if err := c.ShouldBindUri(&uriParams); err != nil {
-        c.Status(http.StatusBadRequest)
-        return
-    }
-
-	err := ch.service.Delete(c, uriParams.ID)
-
+func (h *WarehouseHandler) Delete(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	err = h.service.Delete(c, id)
+	if err != nil {
+		if errors.Is(err, entity.ErrWarehouseNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.Status(http.StatusNoContent)
-}
-
-func (ch *WarehouseHandler) Create(c *gin.Context) {
-	var warehouse Warehouse
-
-	if err  := c.BindJSON(&warehouse); err != nil {
-		return
-	}
-
-	item, err := ch.service.Add(
-		c, 
-		warehouse.Name,
-		warehouse.Address,
-	)
-
-	if err != nil {
-		if errors.Is(err, entity.ErrWarehouseDuplicateFound) {
-			c.Status(http.StatusConflict)
-			return
-		}
-
-		if errors.Is(err, entity.ErrInvalidWarehouseAddress) ||
-		   errors.Is(err, entity.ErrInvalidWarehouseName) {
-			c.Status(http.StatusBadRequest)
-			return	
-		}
-
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
-	dto := Warehouse{
-		ID: item.ID,
-		Name: item.Name,
-		Address: item.Address,
-	}
-
-	c.IndentedJSON(http.StatusOK, dto)
 }

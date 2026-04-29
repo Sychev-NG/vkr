@@ -65,19 +65,21 @@ func setupRouter() *gin.Engine {
 
 	api := router.Group("/api/v1")
 	{
+		// Health check
 		api.GET("/health", func(c *gin.Context) {
 			ctx := context.Background()
 			err := Application.DB.Ping(ctx)
 			if err != nil {
 				c.Status(501)
-				return				
+				return
 			}
-
 			c.Status(200)
 		})
 
-		// Группа товаров
-		productGroup := api.Group("/product")
+		// ========== СПРАВОЧНИКИ ==========
+		
+		// Товары (products)
+		productGroup := api.Group("/products")
 		{
 			productGroup.GET("", Application.ProductHandler.List)
 			productGroup.GET("/:id", Application.ProductHandler.Get)
@@ -86,59 +88,91 @@ func setupRouter() *gin.Engine {
 			productGroup.DELETE("/:id", Application.ProductHandler.Delete)
 		}
 
-        // Группа контрагентов
-        counterpartyGroup := api.Group("/counterparty")
-        {
-            counterpartyGroup.GET("", Application.CounterPartyHandler.List)
-            counterpartyGroup.GET("/:id", Application.CounterPartyHandler.Get)
-            counterpartyGroup.POST("", Application.CounterPartyHandler.Create)
-            counterpartyGroup.PATCH("/:id", Application.CounterPartyHandler.Update)
-            counterpartyGroup.DELETE("/:id", Application.CounterPartyHandler.Delete)
-        }
-
-        // Группа складов
-        warehouseGroup := api.Group("/warehouse")
-        {
-            warehouseGroup.GET("", Application.WarehouseHandler.List)
-            warehouseGroup.GET("/:id", Application.WarehouseHandler.Get)
-            warehouseGroup.POST("", Application.WarehouseHandler.Create)
-            warehouseGroup.PATCH("/:id", Application.WarehouseHandler.Update)
-            warehouseGroup.DELETE("/:id", Application.WarehouseHandler.Delete)
-        }
-
-        // Группа рецептов
-        recipeGroup := api.Group("/recipe")
-        {
-            recipeGroup.GET("", Application.RecipeHandler.List)
-            recipeGroup.GET("/:id", Application.RecipeHandler.Get)
-            recipeGroup.POST("", Application.RecipeHandler.Create)
-            recipeGroup.PATCH("/:id", Application.RecipeHandler.Update)
-            recipeGroup.DELETE("/:id", Application.RecipeHandler.Delete)
-        }
-
-		stocksGroup := api.Group("/stocks")
+		// Контрагенты (counterparties)
+		counterpartyGroup := api.Group("/counterparties")
 		{
-			stocksGroup.GET("", Application.StockHandler.List)
+			counterpartyGroup.GET("", Application.CounterpartyHandler.List)
+			counterpartyGroup.GET("/:id", Application.CounterpartyHandler.Get)
+			counterpartyGroup.POST("", Application.CounterpartyHandler.Create)
+			counterpartyGroup.PATCH("/:id", Application.CounterpartyHandler.Update)
+			counterpartyGroup.DELETE("/:id", Application.CounterpartyHandler.Delete)
 		}
 
-		movementsGroup := api.Group("/movements")
+		// Склады (warehouses)
+		warehouseGroup := api.Group("/warehouses")
 		{
-			movementsGroup.GET("", Application.MovementHandler.List)
+			warehouseGroup.GET("", Application.WarehouseHandler.List)
+			warehouseGroup.GET("/:id", Application.WarehouseHandler.Get)
+			warehouseGroup.POST("", Application.WarehouseHandler.Create)
+			warehouseGroup.PATCH("/:id", Application.WarehouseHandler.Update)
+			warehouseGroup.DELETE("/:id", Application.WarehouseHandler.Delete)
 		}
 
+		// // Спецификации сборки (assemblies)
+		assemblyGroup := api.Group("/assemblies")
+		{
+			assemblyGroup.GET("", Application.AssemblyHandler.List)
+			assemblyGroup.GET("/:id", Application.AssemblyHandler.Get)
+			assemblyGroup.POST("", Application.AssemblyHandler.Create)
+			assemblyGroup.PUT("/:id", Application.AssemblyHandler.Update)
+			assemblyGroup.DELETE("/:id", Application.AssemblyHandler.Delete)
+			// assemblyGroup.GET("/:id/requirements", Application.AssemblyHandler.GetRequirements)
+		}
+
+		// ========== СКЛАДСКИЕ ОПЕРАЦИИ ==========
+
+		// Приход (incoming)
 		incomingGroup := api.Group("/incoming")
 		{
 			incomingGroup.POST("", Application.IncomingHandler.Create)
 		}
 
-		productionGroup := api.Group("/production")
-		{
-			productionGroup.POST("", Application.ProductionHandler.Create)
-		}
-
+		// Отгрузка (outgoing)
 		outgoingGroup := api.Group("/outgoing")
 		{
 			outgoingGroup.POST("", Application.OutgoingHandler.Create)
+		}
+
+		// Сборка (assembly order)
+		assemblyOrderGroup := api.Group("/assembly")
+		{
+			assemblyOrderGroup.POST("", Application.AssemblyOrderHandler.Create)
+		// 	assemblyOrderGroup.GET("/:id", Application.AssemblyOrderHandler.Get)
+		// 	assemblyOrderGroup.GET("", Application.AssemblyOrderHandler.List)
+		}
+
+		// ========== ОТЧЁТЫ И ПРОСМОТРЫ ==========
+
+		// Остатки (stocks)
+		stocksGroup := api.Group("/stocks")
+		{
+			stocksGroup.GET("", Application.StockHandler.List)
+		}
+
+		// Движения (movements) — VIEW
+		movementsGroup := api.Group("/movements")
+		{
+			movementsGroup.GET("", Application.MovementHandler.List)
+		}
+
+		// Партии (batches)
+		batchesGroup := api.Group("/batches")
+		{
+			batchesGroup.GET("", Application.BatchHandler.List)
+			batchesGroup.GET("/:id", Application.BatchHandler.Get)
+		}
+
+		// // Уведомления (alerts)
+		alertsGroup := api.Group("/alerts")
+		{
+			alertsGroup.GET("", Application.AlertHandler.List)
+			alertsGroup.PATCH("/:id/resolve", Application.AlertHandler.Resolve)
+		}
+
+		// // Отчёты (reports)
+		reportsGroup := api.Group("/reports")
+		{
+			reportsGroup.GET("/cogs", Application.ReportHandler.COGS)
 		}
 	}
 

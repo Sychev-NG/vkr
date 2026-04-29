@@ -11,9 +11,9 @@ import (
 )
 
 type QueryExecutor interface {
-    QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-    Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
-    Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 }
 
 type WarehouseRepository struct {
@@ -24,14 +24,14 @@ func New(db QueryExecutor) *WarehouseRepository {
 	return &WarehouseRepository{db: db}
 }
 
-func (pr *WarehouseRepository) Add(ctx context.Context, name, address string) (*entity.Warehouse, error) {
+func (r *WarehouseRepository) Create(ctx context.Context, name, address string) (*entity.Warehouse, error) {
 	var item entity.Warehouse
 
-	err := pr.db.QueryRow(
-		ctx, 
-		"INSERT INTO warehouses (name, address) VALUES ($1, $2) RETURNING id, name, address", 
-		name, 
-		address, 
+	err := r.db.QueryRow(
+		ctx,
+		"INSERT INTO warehouses (name, address) VALUES ($1, $2) RETURNING id, name, address",
+		name,
+		address,
 	).Scan(
 		&item.ID,
 		&item.Name,
@@ -39,24 +39,23 @@ func (pr *WarehouseRepository) Add(ctx context.Context, name, address string) (*
 	)
 
 	if err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { // Psql 23505 - duplicate error code
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
 			return nil, entity.ErrWarehouseDuplicateFound
 		}
-
-		log.Printf("WarehouseRepository::Add Error - %v", err)
+		log.Printf("WarehouseRepository::Create Error - %v", err)
 		return nil, err
 	}
 
 	return &item, nil
 }
 
-func (pr *WarehouseRepository) Update(ctx context.Context, id int, name, address string) (*entity.Warehouse, error) {
+func (r *WarehouseRepository) Update(ctx context.Context, id int, name, address string) (*entity.Warehouse, error) {
 	var item entity.Warehouse
 
-	err := pr.db.QueryRow(
-		ctx, 
-		"UPDATE warehouses SET name=$1, address=$2 WHERE id=$3 RETURNING id, name, address", 
-		name, 
+	err := r.db.QueryRow(
+		ctx,
+		"UPDATE warehouses SET name=$1, address=$2 WHERE id=$3 RETURNING id, name, address",
+		name,
 		address,
 		id,
 	).Scan(
@@ -66,14 +65,12 @@ func (pr *WarehouseRepository) Update(ctx context.Context, id int, name, address
 	)
 
 	if err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { // Psql 23505 - duplicate error code
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
 			return nil, entity.ErrWarehouseDuplicateFound
 		}
-
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrWarehouseNotFound
 		}
-
 		log.Printf("WarehouseRepository::Update Error - %v", err)
 		return nil, err
 	}
@@ -81,40 +78,38 @@ func (pr *WarehouseRepository) Update(ctx context.Context, id int, name, address
 	return &item, nil
 }
 
-func (pr *WarehouseRepository) Delete(ctx context.Context, id int) error {
-	_, err :=pr.db.Exec(ctx, "DELETE FROM warehouses WHERE id=$1", id)
+func (r *WarehouseRepository) Delete(ctx context.Context, id int) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM warehouses WHERE id=$1", id)
 	if err != nil {
 		log.Printf("WarehouseRepository::Delete Error - %v", err)
 	}
 	return err
 }
 
-func (pr *WarehouseRepository) GetById(ctx context.Context, id int) (*entity.Warehouse, error) {
-    var item entity.Warehouse
+func (r *WarehouseRepository) GetByID(ctx context.Context, id int) (*entity.Warehouse, error) {
+	var item entity.Warehouse
 
-    err := pr.db.QueryRow(ctx, "SELECT id, name, address FROM warehouses WHERE id = $1", id).Scan(
-		&item.ID, 
-		&item.Name, 
+	err := r.db.QueryRow(ctx, "SELECT id, name, address FROM warehouses WHERE id = $1", id).Scan(
+		&item.ID,
+		&item.Name,
 		&item.Address,
 	)
-    
-    if err != nil {
+
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrWarehouseNotFound
 		}
+		log.Printf("WarehouseRepository::GetByID Error - %v", err)
+		return nil, err
+	}
 
-		log.Printf("WarehouseRepository::GetById Error - %v", err)
-
-        return nil, err
-    }
-        
-    return &item, nil
+	return &item, nil
 }
 
-func (pr *WarehouseRepository) GetAll(ctx context.Context) ([]entity.Warehouse, error) {
+func (r *WarehouseRepository) GetAll(ctx context.Context) ([]entity.Warehouse, error) {
 	var items []entity.Warehouse
 
-	rows, err := pr.db.Query(ctx, "SELECT id, name, address FROM warehouses")
+	rows, err := r.db.Query(ctx, "SELECT id, name, address FROM warehouses ORDER BY id")
 	if err != nil {
 		log.Printf("WarehouseRepository::GetAll Error - %v", err)
 		return items, err
@@ -123,13 +118,45 @@ func (pr *WarehouseRepository) GetAll(ctx context.Context) ([]entity.Warehouse, 
 
 	for rows.Next() {
 		var item entity.Warehouse
-		rows.Scan(
-			&item.ID, 
-			&item.Name, 
-			&item.Address, 
-		)
+		if err := rows.Scan(
+			&item.ID,
+			&item.Name,
+			&item.Address,
+		); err != nil {
+			log.Printf("WarehouseRepository::GetAll Scan Error - %v", err)
+			continue
+		}
 		items = append(items, item)
 	}
 
-	return items, err
+	return items, nil
+}
+
+func (r *WarehouseRepository) GetByIDs(ctx context.Context, ids []int) ([]entity.Warehouse, error) {
+	if len(ids) == 0 {
+		return []entity.Warehouse{}, nil
+	}
+
+	var items []entity.Warehouse
+	rows, err := r.db.Query(ctx, "SELECT id, name, address FROM warehouses WHERE id = ANY($1)", ids)
+	if err != nil {
+		log.Printf("WarehouseRepository::GetByIDs Error - %v", err)
+		return items, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var item entity.Warehouse
+		if err := rows.Scan(
+			&item.ID,
+			&item.Name,
+			&item.Address,
+		); err != nil {
+			log.Printf("WarehouseRepository::GetByIDs Scan Error - %v", err)
+			continue
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
 }

@@ -9,27 +9,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Product struct {
-	ID   int		 `json:"id"`
-	Name string      `json:"name" binding:"required"`
-	Unit string      `json:"unit" binding:"required"`
-	Type string 	 `json:"type" binding:"required"`
+type ProductDTO struct {
+	ID       int     `json:"id"`
+	Name     string  `json:"name" binding:"required"`
+	Unit     string  `json:"unit" binding:"required"`
+	MinStock float64 `json:"min_stock"`
 }
 
-// func (p *Product) Validate() error {
-// 	switch p.Type {
-// 	case Raw, Finished:
-// 		return nil
-// 	default:
-// 		return fmt.Errorf("expected type '%s' or '%s', got '%s'", Raw, Finished, p.Type)
-// 	}
-// }
-
 type ProductServiceInterface interface {
-	Add(ctx context.Context, name, unit, typeName string) (*entity.Product, error)
-	GetById(ctx context.Context, id int) (*entity.Product, error)
+	Add(ctx context.Context, name, unit string, minStock float64) (*entity.Product, error)
+	GetByID(ctx context.Context, id int) (*entity.Product, error)
 	GetAll(ctx context.Context) ([]entity.Product, error)
-	Update(ctx context.Context, id int, name, unit, typeName string) (*entity.Product, error)
+	Update(ctx context.Context, id int, name, unit string, minStock float64) (*entity.Product, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -51,48 +42,44 @@ func (ph *ProductHandler) Get(c *gin.Context) {
         return
     }
 
-	item, err := ph.service.GetById(c, uriParams.ID)
-
+	item, err := ph.service.GetByID(c, uriParams.ID)
 	if err != nil {
 		if errors.Is(err, entity.ErrProductNotFound) {
 			c.Status(http.StatusNotFound)
-			return			
+			return
 		}
-
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-	
-	dto := Product{
-		ID: item.ID,
-		Name: item.Name,
-		Unit: item.Unit,
-		Type: item.TypeName,
+
+	dto := ProductDTO{
+		ID:       item.ID,
+		Name:     item.Name,
+		Unit:     item.Unit,
+		MinStock: item.MinStock,
 	}
 
-	c.IndentedJSON(http.StatusOK, dto)
+	c.JSON(http.StatusOK, dto)
 }
 
 func (ph *ProductHandler) List(c *gin.Context) {
 	items, err := ph.service.GetAll(c)
-	
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	dtoCollection := make([]Product,0,len(items))
-
+	dtoCollection := make([]ProductDTO, 0, len(items))
 	for _, item := range items {
-		dtoCollection = append(dtoCollection, Product{
-			ID: item.ID,
-			Name: item.Name,
-			Unit: item.Unit,
-			Type: item.TypeName,
+		dtoCollection = append(dtoCollection, ProductDTO{
+			ID:       item.ID,
+			Name:     item.Name,
+			Unit:     item.Unit,
+			MinStock: item.MinStock,
 		})
 	}
 
-	c.IndentedJSON(http.StatusOK, dtoCollection)
+	c.JSON(http.StatusOK, dtoCollection)
 }
 
 func (ph *ProductHandler) Update(c *gin.Context) {
@@ -104,46 +91,35 @@ func (ph *ProductHandler) Update(c *gin.Context) {
         c.Status(http.StatusBadRequest)
         return
     }
-
-	var product Product
-
-	if err  := c.BindJSON(&product); err != nil {
+	
+	var dto ProductDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	item, err := ph.service.Update(
-		c, 
-		uriParams.ID,
-		product.Name,
-		product.Unit,
-		product.Type,
-	)
-
+	item, err := ph.service.Update(c, uriParams.ID, dto.Name, dto.Unit, dto.MinStock)
 	if err != nil {
 		if errors.Is(err, entity.ErrProductNotFound) {
 			c.Status(http.StatusNotFound)
 			return
 		}
-
-		if errors.Is(err, entity.ErrInvalidProductType) || 
-		   errors.Is(err, entity.ErrInvalidProductUnit) ||
-		   errors.Is(err, entity.ErrInvalidProductName) {
+		if errors.Is(err, entity.ErrInvalidProductName) ||
+			errors.Is(err, entity.ErrInvalidProductUnit) {
 			c.Status(http.StatusBadRequest)
-			return	
+			return
 		}
-
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	dto := Product{
-		ID: item.ID,
-		Name: item.Name,
-		Unit: item.Unit,
-		Type: item.TypeName,
+	response := ProductDTO{
+		ID:       item.ID,
+		Name:     item.Name,
+		Unit:     item.Unit,
+		MinStock: item.MinStock,
 	}
-
-	c.IndentedJSON(http.StatusOK, dto)
+	c.JSON(http.StatusOK, response)
 }
 
 func (ph *ProductHandler) Delete(c *gin.Context) {
@@ -157,8 +133,11 @@ func (ph *ProductHandler) Delete(c *gin.Context) {
     }
 
 	err := ph.service.Delete(c, uriParams.ID)
-
 	if err != nil {
+		if errors.Is(err, entity.ErrProductNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -167,37 +146,28 @@ func (ph *ProductHandler) Delete(c *gin.Context) {
 }
 
 func (ph *ProductHandler) Create(c *gin.Context) {
-	var product Product
-
-	if err  := c.BindJSON(&product); err != nil {
+	var dto ProductDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	item, err := ph.service.Add(
-		c, 
-		product.Name,
-		product.Unit,
-		product.Type,
-	)
-
+	item, err := ph.service.Add(c, dto.Name, dto.Unit, dto.MinStock)
 	if err != nil {
-		if errors.Is(err, entity.ErrInvalidProductType) || 
-		   errors.Is(err, entity.ErrInvalidProductUnit) ||
-		   errors.Is(err, entity.ErrInvalidProductName) {
+		if errors.Is(err, entity.ErrInvalidProductName) ||
+			errors.Is(err, entity.ErrInvalidProductUnit) {
 			c.Status(http.StatusBadRequest)
-			return	
+			return
 		}
-
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	dto := Product{
-		ID: item.ID,
-		Name: item.Name,
-		Unit: item.Unit,
-		Type: item.TypeName,
+	response := ProductDTO{
+		ID:       item.ID,
+		Name:     item.Name,
+		Unit:     item.Unit,
+		MinStock: item.MinStock,
 	}
-
-	c.IndentedJSON(http.StatusOK, dto)
+	c.JSON(http.StatusCreated, response)
 }
