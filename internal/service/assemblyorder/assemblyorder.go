@@ -143,8 +143,8 @@ func (s *AssemblyOrderService) Create(ctx context.Context, vo docAssembly.Upsert
 			var fullMovementCost float64
 			var movedCount float64
 			for _, m := range mCollectiom {
-				movedCount += m.StockMovement
-				fullMovementCost += m.UnitCost * m.StockMovement
+				movedCount += (-m.StockMovement)
+				fullMovementCost += m.UnitCost * (-m.StockMovement)
 			}
 
 			totalUnitCost := fullMovementCost / movedCount 
