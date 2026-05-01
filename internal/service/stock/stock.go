@@ -145,7 +145,7 @@ func (ss *StockService) Remove(ctx context.Context, docVO document.Document, pro
 			return err
 		}
 
-		ss.notifyStockChange(txCtx, product_id, warehouse_id, stock.Quantity, quantity)
+		ss.notifyStockChange(txCtx, product_id, warehouse_id, stock.Quantity, stock.Quantity-quantity)
 
 		return nil
 	})
