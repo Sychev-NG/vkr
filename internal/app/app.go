@@ -4,50 +4,58 @@ import (
 	"context"
 	"log"
 	"vkr/internal/config"
-	storage "vkr/internal/storage/postgres"
+
+	"vkr/internal/event"
+	eventSubscriber "vkr/internal/event/subscriber"
+	domainEvent "vkr/internal/entity/event"
+
 	repos "vkr/internal/repository/postgres"
+	storage "vkr/internal/storage/postgres"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	// Handlers
-	pHandler "vkr/internal/handlers/product"
-	cpHandler "vkr/internal/handlers/counterparty"
-	wHandler "vkr/internal/handlers/warehouses"
+	alHandler "vkr/internal/handlers/alert"
 	aHandler "vkr/internal/handlers/assembly"
 	aoHandler "vkr/internal/handlers/assembly_order"
-	sHandler "vkr/internal/handlers/stock"
 	bHandler "vkr/internal/handlers/batch"
-	mHandler "vkr/internal/handlers/movement"
-	alHandler "vkr/internal/handlers/alert"
+	cpHandler "vkr/internal/handlers/counterparty"
 	iHandler "vkr/internal/handlers/incoming"
+	mHandler "vkr/internal/handlers/movement"
 	oHandler "vkr/internal/handlers/outgoing"
+	pHandler "vkr/internal/handlers/product"
 	rHandler "vkr/internal/handlers/report"
+	sHandler "vkr/internal/handlers/stock"
+	wHandler "vkr/internal/handlers/warehouses"
 
 	// Repositories
-	pRepo "vkr/internal/repository/postgres/product"
-	cpRepo "vkr/internal/repository/postgres/counterparty"
-	wRepo "vkr/internal/repository/postgres/warehouse"
 	aRepo "vkr/internal/repository/postgres/assembly"
+	cpRepo "vkr/internal/repository/postgres/counterparty"
+	pRepo "vkr/internal/repository/postgres/product"
+	wRepo "vkr/internal/repository/postgres/warehouse"
+
 	// acRepo "vkr/internal/repository/postgres/assembly_component"
 	aoRepo "vkr/internal/repository/postgres/assemblyorder"
 	// aocRepo "vkr/internal/repository/postgres/assembly_order_consumption"
 	// aooRepo "vkr/internal/repository/postgres/assembly_order_output"
-	sRepo "vkr/internal/repository/postgres/stock"
-	bRepo "vkr/internal/repository/postgres/batch"
-	mRepo "vkr/internal/repository/postgres/movement"
 	alRepo "vkr/internal/repository/postgres/alert"
+	bRepo "vkr/internal/repository/postgres/batch"
 	iRepo "vkr/internal/repository/postgres/incoming"
+	mRepo "vkr/internal/repository/postgres/movement"
+	sRepo "vkr/internal/repository/postgres/stock"
+
 	// iiRepo "vkr/internal/repository/postgres/incoming_item"
 	oRepo "vkr/internal/repository/postgres/outgoing"
 	// oiRepo "vkr/internal/repository/postgres/outgoing_item"
 
 	// Services
-	pService "vkr/internal/service/product"
-	cpService "vkr/internal/service/counterparty"
-	wService "vkr/internal/service/warehouse"
 	aService "vkr/internal/service/assembly"
 	aoService "vkr/internal/service/assemblyorder"
+	cpService "vkr/internal/service/counterparty"
+	pService "vkr/internal/service/product"
 	sService "vkr/internal/service/stock"
+	wService "vkr/internal/service/warehouse"
+
 	// bService "vkr/internal/service/batches"
 	alService "vkr/internal/service/alert"
 	iService "vkr/internal/service/incoming"
@@ -61,6 +69,7 @@ type App struct {
 	DB      *pgxpool.Pool
 	TxMan   *storage.TransactionManager
 	RepoFactory *repos.RepositoryFactory
+	EventDispatcher *event.EventDispatcher
 
 	// Services
 	ProductService     		*pService.ProductService
@@ -110,11 +119,13 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	app.EventDispatcher = event.New()
 	app.RepoFactory = repos.New(app.DB)
 
 	app.initRepos()
 	app.initServices()
 	app.initHandlers()
+	app.initEventBus()
 
 	return app, nil
 }
@@ -138,7 +149,7 @@ func (app *App) initDB() error {
 }
 
 func (app *App) initServices() {
-	app.StockService = sService.New(app.TxMan, app.RepoFactory)
+	app.StockService = sService.New(app.TxMan, app.RepoFactory, app.EventDispatcher)
 	app.ProductService = pService.New(app.ProductRepository, app.ProductRepository)
 	app.CounterpartyService = cpService.New(app.CounterPartyRepository, app.CounterPartyRepository)
 	app.WarehouseService = wService.New(app.WarehouseRepository, app.WarehouseRepository)
@@ -177,6 +188,13 @@ func (app *App) initRepos() {
 	app.OutgoingRepository = oRepo.New(app.DB)
 	app.StockRepository = sRepo.New(app.DB)
 	app.AssemblyRepository = aRepo.New(app.DB)
+}
+
+func (app *App) initEventBus() {
+	app.EventDispatcher.Subscribe(
+		eventSubscriber.New(app.AlertService, app.ProductRepository), 
+		&domainEvent.StockEvent{},
+	)
 }
 
 func (app *App) Close() {

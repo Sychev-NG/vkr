@@ -8,6 +8,7 @@ import (
 
 type AlertSaver interface{
 	Resolve(ctx context.Context, id int) error
+	Create(ctx context.Context, vo entity.UpsertAlertVO) (*entity.Alert, error)
 }
 
 type AlertProvider interface{
@@ -30,6 +31,10 @@ func (s *AlertService) GetAlerts(ctx context.Context, filter entity.AlertFilter)
 		return nil, err
 	}
 	return alerts, nil
+}
+
+func (s *AlertService) Add(ctx context.Context, vo entity.UpsertAlertVO) (*entity.Alert, error) {
+	return s.s.Create(ctx, vo)
 }
 
 func (s *AlertService) Resolve(ctx context.Context, id int) error {

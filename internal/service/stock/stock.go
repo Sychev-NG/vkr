@@ -6,7 +6,9 @@ import (
 	"math"
 
 	"vkr/internal/entity"
+	domainEvent "vkr/internal/entity/event"
 	"vkr/internal/entity/document"
+	"vkr/internal/event"
 	"vkr/internal/repository/postgres"
 	// bRepo "vkr/internal/repository/postgres/batch"
 	// bmRepo "vkr/internal/repository/postgres/batch_movement"
@@ -25,10 +27,11 @@ type ProductProvider interface {
 type StockService struct {
 	txManager		TxManager
 	f 				*postgres.RepositoryFactory
+	ed 				*event.EventDispatcher
 }
 
-func New(tx TxManager, f *postgres.RepositoryFactory) *StockService {
-	return &StockService{tx, f}
+func New(tx TxManager, f *postgres.RepositoryFactory, ed *event.EventDispatcher) *StockService {
+	return &StockService{tx, f, ed}
 }
 
 func (ps *StockService) GetByFilter(ctx context.Context, filter entity.StockFilter) ([]entity.Stock, error) {
@@ -142,6 +145,8 @@ func (ss *StockService) Remove(ctx context.Context, docVO document.Document, pro
 			return err
 		}
 
+		ss.notifyStockChange(txCtx, product_id, warehouse_id, stock.Quantity, quantity)
+
 		return nil
 	})
 
@@ -150,6 +155,17 @@ func (ss *StockService) Remove(ctx context.Context, docVO document.Document, pro
 	}
 
 	return nil
+}
+
+func (ss *StockService) notifyStockChange(ctx context.Context, product_id, warehouse_id int, oldQ, newQ float64) {
+	event := domainEvent.StockEvent{
+		ProductID: product_id,
+		WarehouseID: warehouse_id,
+		OldQuantity: oldQ,
+		NewQuantity: newQ,
+	}
+
+	ss.ed.Dispatch(ctx, &event)
 }
 
 func (ss *StockService) GetAvailableQuantity(ctx context.Context, product_id, warehouse_id int) (float64, error) {

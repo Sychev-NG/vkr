@@ -63,6 +63,20 @@ func main() {
 func setupRouter() *gin.Engine {
 	router := gin.Default()
 
+	router.Use(func(c *gin.Context) {
+        c.Header("Access-Control-Allow-Origin", "*")
+        c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        c.Header("Access-Control-Expose-Headers", "Content-Length")
+        
+        if c.Request.Method == "OPTIONS" {
+            c.AbortWithStatus(204)
+            return
+        }
+        
+        c.Next()
+    })
+
 	api := router.Group("/api/v1")
 	{
 		// Health check

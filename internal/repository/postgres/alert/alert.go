@@ -24,17 +24,26 @@ func New(db QueryExecutor) *AlertRepository {
 	return &AlertRepository{db: db}
 }
 
-func (r *AlertRepository) Create(ctx context.Context, productID, warehouseID int, message string) error {
-	_, err := r.db.Exec(ctx, `
+func (r *AlertRepository) Create(ctx context.Context, vo entity.UpsertAlertVO) (*entity.Alert, error) {
+	var alert entity.Alert
+	err := r.db.QueryRow(ctx, `
 		INSERT INTO alerts (product_id, warehouse_id, message, created_at, is_resolved)
-		VALUES ($1, $2, $3, $4, $5)`,
-		productID, warehouseID, message, time.Now().UTC(), false,
+		VALUES ($1, $2, $3, $4, $5) RETURNING id, product_id, warehouse_id, message, created_at, is_resolved, resolved_at`,
+		vo.ProductID, vo.WarehouseID, vo.Message, time.Now().UTC(), false,
+	).Scan(
+		&alert.ID,
+		&alert.ProductID,
+		&alert.WarehouseID,
+		&alert.Message,
+		&alert.CreatedAt,
+		&alert.IsResolved,
+		&alert.ResolvedAt,
 	)
 	if err != nil {
 		log.Printf("AlertRepository::Create Error - %v", err)
-		return err
+		return nil, err
 	}
-	return nil
+	return &alert ,nil
 }
 
 func (r *AlertRepository) Resolve(ctx context.Context, id int) error {
