@@ -17,6 +17,7 @@ type BatchDTO struct {
 	WarehouseID       int     `json:"warehouse_id"`
 	WarehouseName     string  `json:"warehouse_name"`
 	QuantityRemaining float64 `json:"quantity_remaining"`
+	UnitCost		  float64 `json:"unit_cost"`
 	CreatedAt         string  `json:"created_at"`
 }
 
@@ -86,6 +87,7 @@ func (h *BatchHandler) List(c *gin.Context) {
 			WarehouseID: item.WarehouseID,
 			WarehouseName: warhouse.Name,
 			QuantityRemaining: item.QuantityRemaining,
+			UnitCost: 		   item.UnitCost,
 			CreatedAt: item.CreatedAt.Format(time.DateTime),
 		}
 	}
@@ -129,6 +131,7 @@ func (h *BatchHandler) Get(c *gin.Context) {
 		WarehouseID:       batch.WarehouseID,
 		WarehouseName:     warehouse.Name,
 		QuantityRemaining: batch.QuantityRemaining,
+		UnitCost: 		   batch.UnitCost,
 		CreatedAt:         batch.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	})
 }
